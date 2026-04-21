@@ -1,0 +1,1700 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'ai_assistant_service.dart';
+
+// ─────────────────────────────────────────────────────────────────
+// ТОЧКА ВХОДА
+// ─────────────────────────────────────────────────────────────────
+void main() => runApp(const CollegeDuApp());
+
+// ─────────────────────────────────────────────────────────────────
+// МОДЕЛИ ДАННЫХ  (const-конструкторы — нет лишних аллокаций)
+// ─────────────────────────────────────────────────────────────────
+class Course {
+  final String id;
+  final String title;
+  final String teacher;
+  final String description;
+  const Course({
+    required this.id,
+    required this.title,
+    required this.teacher,
+    required this.description,
+  });
+}
+
+class MenuItem {
+  final String name;
+  final String type;
+  final int price;
+  const MenuItem({required this.name, required this.type, required this.price});
+}
+
+class Grade {
+  final String subject;
+  final int semester1;
+  final int semester2;
+  final double average;
+  const Grade({
+    required this.subject,
+    required this.semester1,
+    required this.semester2,
+    required this.average,
+  });
+}
+
+class Event {
+  final String id;
+  final String title;
+  final String description;
+  final String date;
+  final String location;
+  const Event({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.date,
+    required this.location,
+  });
+}
+
+class Announcement {
+  final String author;
+  final String time;
+  final String message;
+  const Announcement({
+    required this.author,
+    required this.time,
+    required this.message,
+  });
+}
+
+class CalendarDay {
+  final String weekday;
+  final int date;
+  final bool hasClass;
+  const CalendarDay({
+    required this.weekday,
+    required this.date,
+    required this.hasClass,
+  });
+}
+
+class ScheduleClass {
+  final String title;
+  final String subtitle;
+  final String time;
+  final String teacher;
+  final String room;
+  const ScheduleClass({
+    required this.title,
+    required this.subtitle,
+    required this.time,
+    required this.teacher,
+    required this.room,
+  });
+}
+
+class ChatMessage {
+  final String text;
+  final bool isUser;
+  const ChatMessage({required this.text, required this.isUser});
+}
+
+// ─────────────────────────────────────────────────────────────────
+// СОСТОЯНИЕ ПРИЛОЖЕНИЯ (ChangeNotifier — нет God-Widget)
+// ─────────────────────────────────────────────────────────────────
+class AppState extends ChangeNotifier {
+  bool _loggedIn = false;
+  String _userName = '';
+  ThemeMode _themeMode = ThemeMode.light;
+  Locale _locale = const Locale('ru');
+  bool _notifyClasses = true;
+  bool _notifyAnnouncements = true;
+  bool _notifyEvents = true;
+  // Настраиваемый URL Ollama — можно менять в профиле
+  String _ollamaUrl = 'http://localhost:11434';
+
+  bool get loggedIn => _loggedIn;
+  String get userName => _userName;
+  ThemeMode get themeMode => _themeMode;
+  Locale get locale => _locale;
+  bool get notifyClasses => _notifyClasses;
+  bool get notifyAnnouncements => _notifyAnnouncements;
+  bool get notifyEvents => _notifyEvents;
+  String get ollamaUrl => _ollamaUrl;
+
+  void login(String name) {
+    _loggedIn = true;
+    _userName = name;
+    notifyListeners();
+  }
+
+  void logout() {
+    _loggedIn = false;
+    _userName = '';
+    notifyListeners();
+  }
+
+  void setTheme(bool isDark) {
+    _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
+    notifyListeners();
+  }
+
+  void setLocale(Locale locale) {
+    _locale = locale;
+    notifyListeners();
+  }
+
+  void setNotifyClasses(bool v) { _notifyClasses = v; notifyListeners(); }
+  void setNotifyAnnouncements(bool v) { _notifyAnnouncements = v; notifyListeners(); }
+  void setNotifyEvents(bool v) { _notifyEvents = v; notifyListeners(); }
+  void setOllamaUrl(String url) { _ollamaUrl = url.trim(); notifyListeners(); }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ЛОКАЛИЗАЦИЯ (типизированные геттеры — нет magic-string ключей)
+// ─────────────────────────────────────────────────────────────────
+class AppL10n {
+  final Locale locale;
+  const AppL10n(this.locale);
+
+  static AppL10n of(BuildContext context) {
+    final state = context.dependOnInheritedWidgetOfExactType<_AppStateScope>()!.state;
+    return AppL10n(state.locale);
+  }
+
+  bool get _isKk => locale.languageCode == 'kk';
+
+  String get appTitle => 'CollegeDu';
+  String get welcomeTitle => _isKk ? 'CollegeDu қосымшасына қош келдіңіз' : 'Добро пожаловать в CollegeDu';
+  String get welcomeSubtitle => _isKk ? 'Оқу қосымшасының мысалы — кіріп жалғастырыңыз.' : 'Пример учебного приложения — войдите, чтобы продолжить.';
+  String get nameLabel => _isKk ? 'Аты-жөні' : 'ФИО';
+  String get loginButton => _isKk ? 'Кіру' : 'Войти';
+  String get emptyNameError => _isKk ? 'Атыңызды енгізіңіз' : 'Пожалуйста, введите имя';
+  String get testDataHint => _isKk ? 'Немесе тест деректерін қолданыңыз' : 'Или используйте тестовые данные';
+  String get demoNote => 'CollegeDu — demo';
+  String greet(String name) => _isKk ? 'Сәлем, $name' : 'Привет, $name';
+  String get myCourses => _isKk ? 'Менің курстарым' : 'Мои курсы';
+  String get newsTitle => _isKk ? 'Жаңалықтар' : 'Новости';
+  String get viewMenuButton => _isKk ? 'Асхана мәзірін қарау' : 'Посмотреть меню столовой';
+  String get showScheduleButton => _isKk ? 'Кестені көрсету' : 'Показать расписание';
+  String get weekInfo => _isKk ? '2 апта' : '2 недели';
+  String get scheduleTitle => _isKk ? 'Кесте' : 'Расписание';
+  String get coursesTitle => _isKk ? 'Курстар' : 'Курсы';
+  String get materialsTitle => _isKk ? 'Материалдар' : 'Материалы';
+  String get lecture1 => _isKk ? '1 дәріс — Кіріспе' : 'Лекция 1 — Введение';
+  String get practice1 => _isKk ? '1 тәжірибе' : 'Практика 1';
+  String get menuPageTitle => _isKk ? 'Асхана мәзірі' : 'Меню столовой';
+  String get preorderButton => _isKk ? 'Алдын ала тапсырыс' : 'Предзаказать';
+  String itemAdded(String name) => _isKk ? '$name себетке қосылды' : '$name добавлено в корзину';
+  String get journalTitle => _isKk ? 'Табель' : 'Журнал';
+  String get journalSubtitle => _isKk ? '2 семестр үшін бағалар' : 'Успеваемость за 2 семестра';
+  String get semesterLabel => _isKk ? 'Семестр' : 'Семестр';
+  String get averageLabel => _isKk ? 'Орташа' : 'Средний';
+  String get profileTitle => _isKk ? 'Профиль' : 'Профиль';
+  String get studentGroup => _isKk ? 'Топ: ИС-25-3' : 'Группа: ИС-25-3';
+  String get specialty => _isKk ? 'Мамандығы: Бағдарламалық инженерия' : 'Специальность: Программная инженерия';
+  String get studentGpa => _isKk ? 'Бағалау: 4.2' : 'Успеваемость: 4.2';
+  String get studentCredits => _isKk ? 'Кредиттер: 86' : 'Кредиты: 86';
+  String get emailLabel => 'email@college.edu';
+  String get phoneLabel => '+7 700 000 0000';
+  String get notificationsTitle => _isKk ? 'Хабарламалар параметрлері' : 'Настройки уведомлений';
+  String get notifyClasses => _isKk ? 'Сабақтарға ескерту' : 'Напоминания о парах';
+  String get notifyAnnouncements => _isKk ? 'Хабарландырулар туралы ескерту' : 'Уведомления об объявлениях';
+  String get notifyEvents => _isKk ? 'Оқиғалар туралы ескерту' : 'Уведомления о событиях';
+  String get groupChatTitle => _isKk ? 'Топтық чат' : 'Чат группы';
+  String get onlyCurator => _isKk ? 'Тек куратор жазады' : 'Здесь пишет только куратор';
+  String get openAnnouncements => _isKk ? 'Хабарландыруларды ашу' : 'Открыть объявления';
+  String get curatorOnlyNote => _isKk
+      ? 'Бұл чатта тек куратор хабарламалар жариялайды.'
+      : 'В этом чате публикует только куратор.';
+  String get cartTitle => _isKk ? 'Тапсырыс себеті' : 'Корзина заказа';
+  String get cartEmpty => _isKk ? 'Себет бос' : 'Корзина пуста';
+  String get total => _isKk ? 'Барлығы:' : 'Итого:';
+  String get payNow => _isKk ? 'Онлайн төлеу' : 'Оплатить онлайн';
+  String get orderConfirmed => _isKk ? 'Тапсырыс қабылданды' : 'Заказ принят';
+  String get pickupReady => _isKk
+      ? 'Тапсырыс 15 минут ішінде дайын болады. Кешіктпей келіңіз.'
+      : 'Заказ будет готов через 15 минут. Подойдите без задержек.';
+  String get logoutTitle => _isKk ? 'Шығу' : 'Выход';
+  String get logoutConfirm => _isKk ? 'Шығатыныңызға сенімдісіз бе?' : 'Вы действительно хотите выйти?';
+  String get cancel => _isKk ? 'Болдырмау' : 'Отмена';
+  String get logoutButton => _isKk ? 'Шығу' : 'Выйти';
+  String get darkMode => _isKk ? 'Қара режим' : 'Темная тема';
+  String get lightThemeLabel => _isKk ? 'Жарық режим' : 'Светлая тема';
+  String get darkThemeLabel => _isKk ? 'Қара режим қосылған' : 'Темная тема включена';
+  String get changeLanguage => _isKk ? 'Тіл' : 'Язык интерфейса';
+  String get languageRussian => _isKk ? 'Орысша' : 'Русский';
+  String get languageKazakh => 'Қазақша';
+  String get allFilter => _isKk ? 'Барлығы' : 'Все';
+  String get close => _isKk ? 'Жабу' : 'Закрыть';
+  String get upcomingEvents => _isKk ? 'Алдағы оқиғалар' : 'Предстоящие события';
+  String get eventDate => _isKk ? 'Күні' : 'Дата';
+  String get eventLocation => _isKk ? 'Орын' : 'Место';
+  String get aiAssistantTitle => _isKk ? 'ЖИ көмекші' : 'ИИ-помощник';
+  String get send => _isKk ? 'Жіберу' : 'Отправить';
+  String get aiPlaceholder => _isKk ? 'Сұрақ қойыңыз...' : 'Задайте вопрос...';
+  String get quickQuestions => _isKk ? 'Жылдам сұрақтар' : 'Быстрые вопросы';
+  String get aiThinking => _isKk ? 'ЖИ жауап дайындауда...' : 'ИИ готовит ответ...';
+  String get homeTab => _isKk ? 'Басты' : 'Главная';
+  String get announcementsTitle => _isKk ? 'Хабарландырулар' : 'Объявления';
+  String get ollamaUrlLabel => _isKk ? 'Ollama URL' : 'Ollama URL';
+  String get ollamaUrlHint => 'http://192.168.X.X:11434';
+  String get saveButton => _isKk ? 'Сақтау' : 'Сохранить';
+
+  // Быстрые вопросы — хранятся как пары текст/ответ, не как ключи локализации
+  List<({String question, String answer})> get quickQA => _isKk
+      ? [
+          (question: 'Математика курсы туралы', answer: 'Математика курсы алгебра, геометрия және анализды қамтиды. Дүйсенбі сайын 9:00-да дәріс.'),
+          (question: 'Бүгінгі кесте қандай?', answer: 'Бүгін: Математика 9:00-10:30, Бағдарламалау 11:00-12:30.'),
+          (question: 'Физика есебіне көмек', answer: 'Әрине! Есепті толығырақ айтыңыз, көмектесемін.'),
+          (question: 'Асхана мәзірінде не бар?', answer: 'Бүгін: Борщ, котлет картоппен, қызылша салаты.'),
+        ]
+      : [
+          (question: 'Расскажи о курсе математики', answer: 'Курс математики включает алгебру, геометрию и анализ. Лекции по понедельникам в 9:00.'),
+          (question: 'Какое расписание на сегодня?', answer: 'Сегодня: Математика 9:00-10:30, Программирование 11:00-12:30.'),
+          (question: 'Помоги с задачей по физике', answer: 'Конечно! Расскажите подробнее о задаче, и я помогу.'),
+          (question: 'Что в меню столовой?', answer: 'Сегодня: Борщ, котлета с картошкой, салат из свеклы.'),
+        ];
+}
+
+// ─────────────────────────────────────────────────────────────────
+// InheritedWidget для AppState (минимальный, без Provider-пакета)
+// ─────────────────────────────────────────────────────────────────
+class _AppStateScope extends InheritedNotifier<AppState> {
+  const _AppStateScope({required AppState state, required super.child})
+      : super(notifier: state);
+
+  AppState get state => notifier!;
+
+  static AppState of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_AppStateScope>()!.state;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// КОРНЕВОЙ ВИДЖЕТ
+// ─────────────────────────────────────────────────────────────────
+class CollegeDuApp extends StatefulWidget {
+  const CollegeDuApp({super.key});
+
+  @override
+  State<CollegeDuApp> createState() => _CollegeDuAppState();
+}
+
+class _CollegeDuAppState extends State<CollegeDuApp> {
+  final _appState = AppState();
+
+  @override
+  void dispose() {
+    _appState.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _AppStateScope(
+      state: _appState,
+      child: ListenableBuilder(
+        listenable: _appState,
+        builder: (context, _) {
+          return MaterialApp(
+            title: 'CollegeDu',
+            debugShowCheckedModeBanner: false,
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: const [Locale('ru'), Locale('kk')],
+            locale: _appState.locale,
+            themeMode: _appState.themeMode,
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+              useMaterial3: true,
+            ),
+            darkTheme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: Colors.indigo,
+                brightness: Brightness.dark,
+              ),
+              useMaterial3: true,
+            ),
+            home: _appState.loggedIn
+                ? MainScreen(userName: _appState.userName)
+                : const LoginScreen(),
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ДАННЫЕ ПРИЛОЖЕНИЯ (единственный источник правды)
+// ─────────────────────────────────────────────────────────────────
+class AppData {
+  static const courses = [
+    Course(id: 'c1', title: 'Математика 1', teacher: 'Проф. Петров', description: 'Базовая математика: алгебра, геометрия.'),
+    Course(id: 'c2', title: 'Программирование', teacher: 'Иванова А.', description: 'Введение в Dart и Flutter.'),
+    Course(id: 'c3', title: 'Физика', teacher: 'Сидоров', description: 'Механика, термодинамика.'),
+  ];
+
+  static const menuItems = [
+    MenuItem(name: 'Борщ', type: 'Обед', price: 350),
+    MenuItem(name: 'Котлета с картошкой', type: 'Обед', price: 420),
+    MenuItem(name: 'Салат из свеклы', type: 'Закуска', price: 150),
+    MenuItem(name: 'Куриное филе', type: 'Ужин', price: 380),
+    MenuItem(name: 'Вода 0.5л', type: 'Напитки', price: 100),
+  ];
+
+  static const grades = [
+    Grade(subject: 'Математика', semester1: 4, semester2: 5, average: 4.5),
+    Grade(subject: 'Программирование', semester1: 5, semester2: 5, average: 5.0),
+    Grade(subject: 'Физика', semester1: 4, semester2: 4, average: 4.0),
+    Grade(subject: 'Химия', semester1: 5, semester2: 4, average: 4.5),
+    Grade(subject: 'Қазақ тілі', semester1: 4, semester2: 4, average: 4.0),
+    Grade(subject: 'Орыс тілі', semester1: 5, semester2: 5, average: 5.0),
+  ];
+
+  static const events = [
+    Event(id: 'e1', title: 'Олимпиада по математике', description: 'Международная олимпиада по математике для студентов.', date: '15.05.2026', location: 'Главный зал'),
+    Event(id: 'e2', title: 'Конференция по ИТ', description: 'Ежегодная конференция по ИТ.', date: '20.05.2026', location: 'Аудитория 201'),
+    Event(id: 'e3', title: 'Спортфест', description: 'Фестиваль спортивных мероприятий.', date: '25.05.2026', location: 'Стадион'),
+  ];
+
+  static const announcements = [
+    Announcement(author: 'Куратор', time: '09:00', message: 'Собрание группы завтра в 16:00 в аудитории 201.'),
+    Announcement(author: 'Куратор', time: '13:30', message: 'Заполните анкеты для практики до конца недели.'),
+  ];
+
+  // Расписание по индексу дня (0 = ПН, ..., 6 = ВС)
+  static const scheduleByDay = <int, List<ScheduleClass>>{
+    0: [
+      ScheduleClass(title: 'Математика', subtitle: 'Теоретические занятия', time: '08:30-09:50', teacher: 'Проф. Петров', room: '301'),
+      ScheduleClass(title: 'Программирование', subtitle: 'Практика', time: '10:00-11:20', teacher: 'Иванова А.', room: 'Лаб. 2'),
+    ],
+    1: [
+      ScheduleClass(title: 'Информатика', subtitle: 'Теоретические занятия', time: '08:30-09:50', teacher: 'Е. Мирғалыйқызы', room: '216'),
+      ScheduleClass(title: 'Биология', subtitle: 'Теоретические занятия', time: '09:55-11:15', teacher: 'Мирғалыйқызы Ә.', room: '217'),
+      ScheduleClass(title: 'География', subtitle: 'Теоретические занятия', time: '11:30-12:50', teacher: 'А. Сергеев', room: '214'),
+    ],
+    2: [
+      ScheduleClass(title: 'Физика', subtitle: 'Лекция', time: '09:00-10:20', teacher: 'Сидоров', room: '305'),
+      ScheduleClass(title: 'Химия', subtitle: 'Лабораторная работа', time: '10:30-12:00', teacher: 'Ким О.', room: 'Лаб. 1'),
+    ],
+    3: [
+      ScheduleClass(title: 'Математика', subtitle: 'Практика', time: '08:30-09:50', teacher: 'Проф. Петров', room: '301'),
+    ],
+    4: [
+      ScheduleClass(title: 'Программирование', subtitle: 'Проект', time: '11:00-13:00', teacher: 'Иванова А.', room: 'Лаб. 2'),
+    ],
+    5: [],
+    6: [],
+  };
+
+  static const calendarDays = [
+    CalendarDay(weekday: 'ПН', date: 6, hasClass: true),
+    CalendarDay(weekday: 'ВТ', date: 7, hasClass: true),
+    CalendarDay(weekday: 'СР', date: 8, hasClass: true),
+    CalendarDay(weekday: 'ЧТ', date: 9, hasClass: true),
+    CalendarDay(weekday: 'ПТ', date: 10, hasClass: true),
+    CalendarDay(weekday: 'СБ', date: 11, hasClass: false),
+    CalendarDay(weekday: 'ВС', date: 12, hasClass: false),
+  ];
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ЭКРАН ВХОДА
+// ─────────────────────────────────────────────────────────────────
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _controller = TextEditingController(text: 'Иван Иванов');
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _tryLogin() {
+    final name = _controller.text.trim();
+    final loc = AppL10n.of(context);
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(loc.emptyNameError)),
+      );
+      return;
+    }
+    _AppStateScope.of(context).login(name);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return Scaffold(
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.only(
+            left: 24, right: 24, top: 24,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 48),
+              const FlutterLogo(size: 96),
+              const SizedBox(height: 24),
+              Text(
+                loc.welcomeTitle,
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(loc.welcomeSubtitle, textAlign: TextAlign.center),
+              const SizedBox(height: 28),
+              TextField(
+                controller: _controller,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _tryLogin(),
+                decoration: InputDecoration(
+                  labelText: loc.nameLabel,
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: _tryLogin,
+                child: Text(loc.loginButton),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                loc.testDataHint,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                loc.demoNote,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ГЛАВНЫЙ ЭКРАН
+// ─────────────────────────────────────────────────────────────────
+class MainScreen extends StatefulWidget {
+  final String userName;
+  const MainScreen({super.key, required this.userName});
+
+  @override
+  State<MainScreen> createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> {
+  int _selectedIndex = 0;
+
+  void _onTabTapped(int index) => setState(() => _selectedIndex = index);
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    final pages = [
+      HomePage(userName: widget.userName),
+      const MenuPage(),
+      const JournalPage(),
+      const CoursesPage(),
+      ProfilePage(userName: widget.userName),
+    ];
+
+    return Scaffold(
+      body: IndexedStack(index: _selectedIndex, children: pages),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: _onTabTapped,
+        destinations: [
+          NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home), label: loc.homeTab),
+          NavigationDestination(icon: const Icon(Icons.restaurant_menu_outlined), selectedIcon: const Icon(Icons.restaurant_menu), label: loc.menuPageTitle),
+          NavigationDestination(icon: const Icon(Icons.menu_book_outlined), selectedIcon: const Icon(Icons.menu_book), label: loc.journalTitle),
+          NavigationDestination(icon: const Icon(Icons.school_outlined), selectedIcon: const Icon(Icons.school), label: loc.coursesTitle),
+          NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: loc.profileTitle),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const AIAssistantPage()),
+        ),
+        tooltip: loc.aiAssistantTitle,
+        child: const Icon(Icons.smart_toy),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ГЛАВНАЯ СТРАНИЦА
+// ─────────────────────────────────────────────────────────────────
+class HomePage extends StatelessWidget {
+  final String userName;
+  const HomePage({super.key, required this.userName});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // Приветствие
+          Row(
+            children: [
+              CircleAvatar(radius: 28, child: Text(userName.isNotEmpty ? userName[0] : 'U')),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  loc.greet(userName),
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                onPressed: () {},
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+
+          // Следующая пара (виджет-анонс)
+          const _NextClassCard(),
+          const SizedBox(height: 18),
+
+          // Курсы
+          Text(loc.myCourses, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 140,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: AppData.courses.length,
+              itemBuilder: (_, i) {
+                final c = AppData.courses[i];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _CourseCard(course: c),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // Чат куратора
+          Text(loc.groupChatTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          _AnnouncementsPreview(announcements: AppData.announcements),
+          const SizedBox(height: 18),
+
+          // События
+          Text(loc.upcomingEvents, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 120,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: AppData.events.length,
+              itemBuilder: (_, i) => Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: _EventCard(event: AppData.events[i]),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          // Новости
+          Text(loc.newsTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          const _NewsTile(title: 'Открытие новой лаборатории', subtitle: 'Вслед за обновлением кампуса...'),
+          const _NewsTile(title: 'Расписание экзаменов', subtitle: 'Посмотреть на странице Расписание.'),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MenuPage())),
+            icon: const Icon(Icons.restaurant),
+            label: Text(loc.viewMenuButton),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+/// Карточка "следующая пара" — добавлена новая функция
+class _NextClassCard extends StatelessWidget {
+  const _NextClassCard();
+
+  @override
+  Widget build(BuildContext context) {
+    // Берём ближайший день с парами (вторник в нашем mock)
+    final classes = AppData.scheduleByDay[1] ?? [];
+    if (classes.isEmpty) return const SizedBox.shrink();
+    final next = classes.first;
+    return Card(
+      color: Theme.of(context).colorScheme.primaryContainer,
+      child: ListTile(
+        leading: Icon(Icons.access_time, color: Theme.of(context).colorScheme.primary),
+        title: Text(next.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        subtitle: Text('${next.time}  ·  ауд. ${next.room}  ·  ${next.teacher}'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SchedulePage())),
+      ),
+    );
+  }
+}
+
+class _CourseCard extends StatelessWidget {
+  final Course course;
+  const _CourseCard({required this.course});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => CourseDetailPage(course: course))),
+      child: SizedBox(
+        width: 220,
+        child: Card(
+          elevation: 3,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(course.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 6),
+                Text(course.teacher, style: TextStyle(color: Colors.grey[700])),
+                const SizedBox(height: 8),
+                Expanded(child: Text(course.description, maxLines: 3, overflow: TextOverflow.ellipsis)),
+                Align(alignment: Alignment.bottomRight, child: Icon(Icons.arrow_forward, color: Theme.of(context).colorScheme.primary)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnnouncementsPreview extends StatelessWidget {
+  final List<Announcement> announcements;
+  const _AnnouncementsPreview({required this.announcements});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(loc.onlyCurator, style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            ...announcements.map((a) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('${a.author} • ${a.time}', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                  Text(a.message),
+                ],
+              ),
+            )),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupChatPage(announcements: announcements))),
+                child: Text(loc.openAnnouncements),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EventCard extends StatelessWidget {
+  final Event event;
+  const _EventCard({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return GestureDetector(
+      onTap: () => showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text(event.title),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(event.description),
+              const SizedBox(height: 8),
+              Text('${loc.eventDate}: ${event.date}'),
+              Text('${loc.eventLocation}: ${event.location}'),
+            ],
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(loc.close))],
+        ),
+      ),
+      child: SizedBox(
+        width: 200,
+        child: Card(
+          elevation: 3,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(event.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
+                const Spacer(),
+                Text(event.date, style: const TextStyle(color: Colors.grey)),
+                Text(event.location, style: const TextStyle(color: Colors.grey)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NewsTile extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  const _NewsTile({required this.title, required this.subtitle});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return Card(
+      child: ListTile(
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text(title),
+            content: Text(subtitle),
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(loc.close))],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// СТРАНИЦА КУРСОВ
+// ─────────────────────────────────────────────────────────────────
+class CoursesPage extends StatelessWidget {
+  const CoursesPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(loc.coursesTitle)),
+      body: ListView.builder(
+        padding: const EdgeInsets.all(12),
+        itemCount: AppData.courses.length,
+        itemBuilder: (_, i) {
+          final c = AppData.courses[i];
+          return Card(
+            child: ListTile(
+              title: Text(c.title),
+              subtitle: Text(c.teacher),
+              trailing: const Icon(Icons.arrow_forward),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => CourseDetailPage(course: c))),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class CourseDetailPage extends StatelessWidget {
+  final Course course;
+  const CourseDetailPage({super.key, required this.course});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(course.title)),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(course.teacher, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(course.description),
+            const SizedBox(height: 16),
+            Text(loc.materialsTitle, style: const TextStyle(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView(
+                children: [
+                  ListTile(leading: const Icon(Icons.picture_as_pdf), title: Text(loc.lecture1), trailing: const Icon(Icons.download)),
+                  ListTile(leading: const Icon(Icons.picture_as_pdf), title: Text(loc.practice1), trailing: const Icon(Icons.download)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// СТРАНИЦА МЕНЮ
+// ─────────────────────────────────────────────────────────────────
+class MenuPage extends StatefulWidget {
+  const MenuPage({super.key});
+
+  @override
+  State<MenuPage> createState() => _MenuPageState();
+}
+
+class _MenuPageState extends State<MenuPage> {
+  String _filter = 'Все';
+  final List<MenuItem> _cart = [];
+
+  void _addToCart(MenuItem item) {
+    setState(() => _cart.add(item));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(AppL10n.of(context).itemAdded(item.name))),
+    );
+  }
+
+  int get _cartTotal => _cart.fold(0, (sum, item) => sum + item.price);
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    final types = <String>{'Все', ...AppData.menuItems.map((e) => e.type)};
+    final shown = _filter == 'Все'
+        ? AppData.menuItems
+        : AppData.menuItems.where((m) => m.type == _filter).toList();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(loc.menuPageTitle),
+        actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.shopping_cart),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => PreOrderPage(cart: List.unmodifiable(_cart), total: _cartTotal, onClear: () => setState(() => _cart.clear()))),
+                ),
+              ),
+              if (_cart.isNotEmpty)
+                Positioned(
+                  right: 6, top: 6,
+                  child: CircleAvatar(
+                    radius: 8,
+                    backgroundColor: Colors.red,
+                    child: Text('${_cart.length}', style: const TextStyle(fontSize: 10, color: Colors.white)),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            SizedBox(
+              height: 40,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: types.map((t) => Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(t == 'Все' ? loc.allFilter : t),
+                    selected: _filter == t,
+                    onSelected: (_) => setState(() => _filter = t),
+                  ),
+                )).toList(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                itemCount: shown.length,
+                itemBuilder: (_, i) {
+                  final m = shown[i];
+                  return Card(
+                    child: ListTile(
+                      title: Text(m.name),
+                      subtitle: Text('${m.type} • ${m.price}₸'),
+                      trailing: FilledButton.tonal(
+                        onPressed: () => _addToCart(m),
+                        child: Text(loc.preorderButton),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class PreOrderPage extends StatelessWidget {
+  final List<MenuItem> cart;
+  final int total;
+  final VoidCallback onClear;
+
+  const PreOrderPage({super.key, required this.cart, required this.total, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(loc.cartTitle)),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: cart.isEmpty
+            ? Center(child: Text(loc.cartEmpty))
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: cart.length,
+                      separatorBuilder: (_, __) => const Divider(),
+                      itemBuilder: (_, i) => ListTile(
+                        title: Text(cart[i].name),
+                        subtitle: Text('${cart[i].type} • ${cart[i].price}₸'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('${loc.total} $total₸', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        // Очищаем ПОСЛЕ подтверждения, а не до
+                        showDialog(
+                          context: context,
+                          builder: (_) => AlertDialog(
+                            title: Text(loc.orderConfirmed),
+                            content: Text(loc.pickupReady),
+                            actions: [
+                              TextButton(
+                                onPressed: () {
+                                  onClear();
+                                  Navigator.pop(context);
+                                  Navigator.pop(context);
+                                },
+                                child: Text(loc.close),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      child: Text(loc.payNow),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ЖУРНАЛ УСПЕВАЕМОСТИ
+// ─────────────────────────────────────────────────────────────────
+class JournalPage extends StatelessWidget {
+  const JournalPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(loc.journalTitle),
+          actions: [
+            TextButton.icon(
+              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SchedulePage())),
+              icon: const Icon(Icons.calendar_today, size: 18),
+              label: Text(loc.showScheduleButton),
+            ),
+          ],
+          bottom: TabBar(
+            tabs: [
+              Tab(text: '${loc.semesterLabel} 1'),
+              Tab(text: '${loc.semesterLabel} 2'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            _SemesterList(grades: AppData.grades, semester: 1),
+            _SemesterList(grades: AppData.grades, semester: 2),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SemesterList extends StatelessWidget {
+  final List<Grade> grades;
+  final int semester;
+  const _SemesterList({required this.grades, required this.semester});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: grades.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (_, i) {
+        final g = grades[i];
+        final value = semester == 1 ? g.semester1 : g.semester2;
+        final color = value >= 4 ? Colors.green : (value == 3 ? Colors.orange : Colors.red);
+        return ListTile(
+          title: Text(g.subject, style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text('${loc.averageLabel}: ${g.average.toStringAsFixed(1)}'),
+          trailing: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text('$value', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// РАСПИСАНИЕ (дни → разные пары)
+// ─────────────────────────────────────────────────────────────────
+class SchedulePage extends StatefulWidget {
+  const SchedulePage({super.key});
+
+  @override
+  State<SchedulePage> createState() => _SchedulePageState();
+}
+
+class _SchedulePageState extends State<SchedulePage> {
+  int _selectedDayIndex = 1;
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    final classes = AppData.scheduleByDay[_selectedDayIndex] ?? [];
+
+    return Scaffold(
+      appBar: AppBar(title: Text(loc.scheduleTitle)),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text('апрель 2026 г.', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange[100],
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(loc.weekInfo, style: TextStyle(color: Colors.orange[900], fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: AppData.calendarDays.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final day = entry.value;
+                  final selected = index == _selectedDayIndex;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedDayIndex = index),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      width: 64,
+                      margin: const EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: selected ? Theme.of(context).colorScheme.primary : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: selected ? Theme.of(context).colorScheme.primary : Colors.grey[300]!),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(day.weekday, style: TextStyle(color: selected ? Colors.white : Colors.black54, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          Text('${day.date}', style: TextStyle(color: selected ? Colors.white : Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
+                          if (day.hasClass)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Icon(Icons.circle, size: 8, color: selected ? Colors.white : Theme.of(context).colorScheme.primary),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (classes.isEmpty)
+              const Expanded(child: Center(child: Text('Пар нет 🎉', style: TextStyle(fontSize: 18))))
+            else
+              Expanded(
+                child: ListView.separated(
+                  itemCount: classes.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (_, i) => _ScheduleCard(scheduleClass: classes[i]),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScheduleCard extends StatelessWidget {
+  final ScheduleClass scheduleClass;
+  const _ScheduleCard({required this.scheduleClass});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = scheduleClass;
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(c.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            _IconRow(icon: Icons.description, text: c.subtitle),
+            const SizedBox(height: 8),
+            _IconRow(icon: Icons.access_time, text: c.time),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.person, size: 18, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(child: Text(c.teacher)),
+                Icon(Icons.location_on, size: 18, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 4),
+                Text(c.room),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _IconRow({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+        const SizedBox(width: 8),
+        Expanded(child: Text(text)),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ЧАТ ГРУППЫ
+// ─────────────────────────────────────────────────────────────────
+class GroupChatPage extends StatelessWidget {
+  final List<Announcement> announcements;
+  const GroupChatPage({super.key, required this.announcements});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(loc.groupChatTitle)),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: announcements.length,
+              itemBuilder: (_, i) {
+                final a = announcements[i];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${a.author} • ${a.time}', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                        const SizedBox(height: 8),
+                        Text(a.message),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(loc.curatorOnlyNote, style: TextStyle(color: Colors.grey[600])),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// AI-АССИСТЕНТ (стриминг-индикатор, настраиваемый URL)
+// ─────────────────────────────────────────────────────────────────
+class AIAssistantPage extends StatefulWidget {
+  const AIAssistantPage({super.key});
+
+  @override
+  State<AIAssistantPage> createState() => _AIAssistantPageState();
+}
+
+class _AIAssistantPageState extends State<AIAssistantPage> {
+  final List<ChatMessage> _messages = [];
+  final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _sendMessage(String text) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return;
+
+    setState(() {
+      _messages.add(ChatMessage(text: trimmed, isUser: true));
+      _isLoading = true;
+    });
+    _controller.clear();
+    _scrollToBottom();
+
+    final loc = AppL10n.of(context);
+    final ollamaUrl = _AppStateScope.of(context).ollamaUrl;
+
+    // Проверяем быстрые ответы
+    String reply = '';
+    for (final qa in loc.quickQA) {
+      if (trimmed == qa.question) {
+        reply = qa.answer;
+        break;
+      }
+    }
+
+    // Если не нашли — идём в Ollama
+    if (reply.isEmpty) {
+      reply = await AIAssistantService(trimmed, ollamaUrl: ollamaUrl).getResponse();
+    }
+
+    if (!mounted) return; // проверка после await
+    setState(() {
+      _messages.add(ChatMessage(text: reply, isUser: false));
+      _isLoading = false;
+    });
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    return Scaffold(
+      appBar: AppBar(title: Text(loc.aiAssistantTitle)),
+      body: Column(
+        children: [
+          Expanded(
+            child: _messages.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.smart_toy_outlined, size: 72, color: Theme.of(context).colorScheme.primary),
+                        const SizedBox(height: 16),
+                        Text(loc.aiAssistantTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Text(loc.quickQuestions, style: const TextStyle(color: Colors.grey)),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _messages.length,
+                    itemBuilder: (_, i) => _ChatBubble(message: _messages[i]),
+                  ),
+          ),
+          // Быстрые вопросы
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: loc.quickQA.map((qa) => ActionChip(
+                label: Text(qa.question, overflow: TextOverflow.ellipsis),
+                onPressed: () => _sendMessage(qa.question),
+              )).toList(),
+            ),
+          ),
+          if (_isLoading)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                  const SizedBox(width: 12),
+                  Text(loc.aiThinking),
+                ],
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    textInputAction: TextInputAction.send,
+                    onSubmitted: _sendMessage,
+                    decoration: InputDecoration(
+                      hintText: loc.aiPlaceholder,
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton.filled(
+                  onPressed: _isLoading ? null : () => _sendMessage(_controller.text),
+                  icon: const Icon(Icons.send),
+                  tooltip: loc.send,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatBubble extends StatelessWidget {
+  final ChatMessage message;
+  const _ChatBubble({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final isUser = message.isUser;
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(12),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        decoration: BoxDecoration(
+          color: isUser ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: Radius.circular(isUser ? 16 : 0),
+            bottomRight: Radius.circular(isUser ? 0 : 16),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            if (!isUser) ...[
+              CircleAvatar(radius: 14, backgroundColor: Theme.of(context).colorScheme.primary, child: const Icon(Icons.smart_toy, size: 14, color: Colors.white)),
+              const SizedBox(width: 8),
+            ],
+            Flexible(
+              child: Text(message.text, style: TextStyle(color: isUser ? Colors.white : Theme.of(context).colorScheme.onSurface)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ПРОФИЛЬ
+// ─────────────────────────────────────────────────────────────────
+class ProfilePage extends StatelessWidget {
+  final String userName;
+  const ProfilePage({super.key, required this.userName});
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    final state = _AppStateScope.of(context);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(loc.profileTitle)),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Center(
+            child: Column(
+              children: [
+                CircleAvatar(radius: 42, child: Text(userName.isNotEmpty ? userName[0] : 'U', style: const TextStyle(fontSize: 32))),
+                const SizedBox(height: 12),
+                Text(userName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(loc.studentGroup, style: const TextStyle(color: Colors.grey)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(loc.specialty),
+          Text(loc.studentGpa),
+          Text(loc.studentCredits),
+          const SizedBox(height: 12),
+          ListTile(leading: const Icon(Icons.email), title: Text(loc.emailLabel)),
+          ListTile(leading: const Icon(Icons.phone), title: Text(loc.phoneLabel)),
+          const Divider(),
+
+          // Тема
+          SwitchListTile(
+            secondary: const Icon(Icons.brightness_6),
+            title: Text(loc.darkMode),
+            subtitle: Text(state.themeMode == ThemeMode.dark ? loc.darkThemeLabel : loc.lightThemeLabel),
+            value: state.themeMode == ThemeMode.dark,
+            onChanged: state.setTheme,
+          ),
+
+          // Язык
+          ListTile(
+            leading: const Icon(Icons.language),
+            title: Text(loc.changeLanguage),
+            trailing: DropdownButton<Locale>(
+              value: state.locale,
+              underline: const SizedBox(),
+              items: [
+                DropdownMenuItem(value: const Locale('ru'), child: Text(loc.languageRussian)),
+                DropdownMenuItem(value: const Locale('kk'), child: Text(loc.languageKazakh)),
+              ],
+              onChanged: (v) { if (v != null) state.setLocale(v); },
+            ),
+          ),
+
+          const Divider(),
+
+          // Уведомления
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(loc.notificationsTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.access_time),
+            title: Text(loc.notifyClasses),
+            value: state.notifyClasses,
+            onChanged: state.setNotifyClasses,
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.announcement),
+            title: Text(loc.notifyAnnouncements),
+            value: state.notifyAnnouncements,
+            onChanged: state.setNotifyAnnouncements,
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.event),
+            title: Text(loc.notifyEvents),
+            value: state.notifyEvents,
+            onChanged: state.setNotifyEvents,
+          ),
+
+          const Divider(),
+
+          // Настройка URL Ollama
+          _OllamaUrlTile(currentUrl: state.ollamaUrl, onSave: state.setOllamaUrl),
+
+          const Divider(),
+
+          ListTile(
+            leading: const Icon(Icons.forum),
+            title: Text(loc.announcementsTitle),
+            subtitle: Text(loc.onlyCurator),
+            trailing: const Icon(Icons.arrow_forward),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GroupChatPage(announcements: AppData.announcements))),
+          ),
+
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: () => showDialog(
+              context: context,
+              builder: (_) => AlertDialog(
+                title: Text(loc.logoutTitle),
+                content: Text(loc.logoutConfirm),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: Text(loc.cancel)),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      state.logout();
+                    },
+                    child: Text(loc.logoutButton, style: const TextStyle(color: Colors.red)),
+                  ),
+                ],
+              ),
+            ),
+            icon: const Icon(Icons.exit_to_app),
+            label: Text(loc.logoutButton),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+}
+
+/// Виджет настройки URL для Ollama — новая функция
+class _OllamaUrlTile extends StatefulWidget {
+  final String currentUrl;
+  final ValueChanged<String> onSave;
+  const _OllamaUrlTile({required this.currentUrl, required this.onSave});
+
+  @override
+  State<_OllamaUrlTile> createState() => _OllamaUrlTileState();
+}
+
+class _OllamaUrlTileState extends State<_OllamaUrlTile> {
+  bool _editing = false;
+  late TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.currentUrl);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final loc = AppL10n.of(context);
+    if (!_editing) {
+      return ListTile(
+        leading: const Icon(Icons.computer),
+        title: Text(loc.ollamaUrlLabel),
+        subtitle: Text(widget.currentUrl),
+        trailing: IconButton(icon: const Icon(Icons.edit), onPressed: () => setState(() => _editing = true)),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _ctrl,
+              decoration: InputDecoration(
+                labelText: loc.ollamaUrlLabel,
+                hintText: loc.ollamaUrlHint,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: () {
+              widget.onSave(_ctrl.text);
+              setState(() => _editing = false);
+            },
+            child: Text(loc.saveButton),
+          ),
+        ],
+      ),
+    );
+  }
+}

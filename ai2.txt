@@ -1,0 +1,48 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+/// Сервис для общения с локальной LLM через Ollama.
+/// URL и модель настраиваются извне — не захардкожены.
+class AIAssistantService {
+  final String prompt;
+  final String ollamaUrl;
+  final String ollamaModel;
+
+  const AIAssistantService(
+    this.prompt, {
+    this.ollamaUrl = 'http://localhost:11434',
+    this.ollamaModel = 'qwen2.5:latest',
+  });
+
+  Future<String> getResponse() => _getOllamaResponse(prompt);
+
+  Future<String> _getOllamaResponse(String prompt) async {
+    final url = Uri.parse('$ollamaUrl/api/generate');
+    final body = jsonEncode({
+      'model': ollamaModel,
+      'prompt': prompt,
+      'stream': false,
+    });
+
+    try {
+      final response = await http
+          .post(url, headers: {'Content-Type': 'application/json'}, body: body)
+          .timeout(const Duration(seconds: 60));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final text = data['response'];
+        if (text is String && text.isNotEmpty) return text;
+        return 'Пустой ответ от Ollama.';
+      }
+      return 'Ошибка Ollama: ${response.statusCode}';
+    } on Exception catch (e) {
+      return 'Не удалось подключиться к Ollama ($ollamaUrl).\n'
+          'Проверьте:\n'
+          '1. Ollama запущен\n'
+          '2. Модель загружена: ollama pull $ollamaModel\n'
+          '3. На реальном устройстве замените localhost на IP ПК\n\n'
+          'Детали: $e';
+    }
+  }
+}

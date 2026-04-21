@@ -1,1700 +1,1129 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
-import 'ai_assistant_service.dart';
+import { useState, useEffect, useRef } from "react";
 
-// ─────────────────────────────────────────────────────────────────
-// ТОЧКА ВХОДА
-// ─────────────────────────────────────────────────────────────────
-void main() => runApp(const CollegeDuApp());
+// ═══════════════════════════════════════════════════
+// DESIGN TOKENS
+// ═══════════════════════════════════════════════════
+const T = {
+  indigo: "#4F46E5", indigoDark: "#3730A3", indigoLight: "#EEF2FF",
+  teal: "#0D9488", tealLight: "#F0FDFA",
+  amber: "#D97706", amberLight: "#FFFBEB",
+  rose: "#E11D48", roseLight: "#FFF1F2",
+  sky: "#0284C7", skyLight: "#F0F9FF",
+  emerald: "#059669", emeraldLight: "#ECFDF5",
+  violet: "#7C3AED", violetLight: "#F5F3FF",
+  slate50: "#F8FAFC", slate100: "#F1F5F9", slate200: "#E2E8F0",
+  slate300: "#CBD5E1", slate400: "#94A3B8", slate500: "#64748B",
+  slate600: "#475569", slate700: "#334155", slate800: "#1E293B", slate900: "#0F172A",
+  white: "#FFFFFF",
+  radius: { sm: 8, md: 12, lg: 16, xl: 20, full: 9999 },
+  shadow: { sm: "0 1px 3px rgba(0,0,0,.08)", md: "0 4px 16px rgba(0,0,0,.1)", lg: "0 8px 32px rgba(0,0,0,.12)" },
+};
 
-// ─────────────────────────────────────────────────────────────────
-// МОДЕЛИ ДАННЫХ  (const-конструкторы — нет лишних аллокаций)
-// ─────────────────────────────────────────────────────────────────
-class Course {
-  final String id;
-  final String title;
-  final String teacher;
-  final String description;
-  const Course({
-    required this.id,
-    required this.title,
-    required this.teacher,
-    required this.description,
-  });
-}
+// ═══════════════════════════════════════════════════
+// MOCK DATA
+// ═══════════════════════════════════════════════════
+const BOOKS = [
+  { id:1, title:"Дискретная математика", author:"Новиков Ф.А.", subject:"Математика", available:true, total:5, onHand:2, cover:"📘" },
+  { id:2, title:"Алгоритмы и структуры данных", author:"Кормен Т.", subject:"Информатика", available:false, total:3, onHand:3, cover:"📗" },
+  { id:3, title:"Flutter в действии", author:"Windmill E.", subject:"Программирование", available:true, total:4, onHand:1, cover:"📙" },
+  { id:4, title:"Физика. Курс лекций", author:"Савельев И.В.", subject:"Физика", available:true, total:8, onHand:3, cover:"📕" },
+  { id:5, title:"Базы данных", author:"Атре Ш.", subject:"Информатика", available:true, total:6, onHand:2, cover:"📓" },
+  { id:6, title:"Сети ЭВМ и телекоммуникации", author:"Олифер В.", subject:"Сети", available:false, total:4, onHand:4, cover:"📔" },
+  { id:7, title:"Высшая математика", author:"Данко П.Е.", subject:"Математика", available:true, total:10, onHand:4, cover:"📒" },
+  { id:8, title:"Теория вероятностей", author:"Гмурман В.Е.", subject:"Математика", available:true, total:7, onHand:2, cover:"📘" },
+];
 
-class MenuItem {
-  final String name;
-  final String type;
-  final int price;
-  const MenuItem({required this.name, required this.type, required this.price});
-}
+const ROOMS = [
+  { id:"101", name:"Ауд. 101", type:"Лекционный", floor:1, building:"А", capacity:60, free:true, schedule:[{time:"09:00-10:30",group:"ИС-25-1",subj:"Матем."},{time:"14:00-15:30",group:"ИС-24-2",subj:"Физика"}] },
+  { id:"102", name:"Ауд. 102", type:"Практика", floor:1, building:"А", capacity:30, free:false, currentGroup:"ИС-25-3", untilTime:"12:50", schedule:[{time:"11:20-12:50",group:"ИС-25-3",subj:"Программирование"}] },
+  { id:"201", name:"Ауд. 201", type:"Лекционный", floor:2, building:"А", capacity:80, free:true, schedule:[] },
+  { id:"Лаб.1", name:"Лаб. 1 (ПК)", type:"Лаборатория", floor:1, building:"Б", capacity:20, free:false, currentGroup:"ПИ-24-1", untilTime:"13:00", schedule:[{time:"11:20-13:00",group:"ПИ-24-1",subj:"Базы данных"}] },
+  { id:"Лаб.2", name:"Лаб. 2 (ПК)", type:"Лаборатория", floor:1, building:"Б", capacity:20, free:true, schedule:[{time:"15:00-16:30",group:"ИС-25-2",subj:"Flutter"}] },
+  { id:"305", name:"Ауд. 305", type:"Семинар", floor:3, building:"А", capacity:25, free:true, schedule:[{time:"10:45-12:15",group:"ИС-24-1",subj:"ОС"}] },
+  { id:"Спорт", name:"Спортзал", type:"Спортивный", floor:0, building:"В", capacity:100, free:false, currentGroup:"1-4 курс", untilTime:"18:00", schedule:[] },
+  { id:"Библ.", name:"Библиотека", type:"Библиотека", floor:2, building:"А", capacity:50, free:true, schedule:[] },
+];
 
-class Grade {
-  final String subject;
-  final int semester1;
-  final int semester2;
-  final double average;
-  const Grade({
-    required this.subject,
-    required this.semester1,
-    required this.semester2,
-    required this.average,
-  });
-}
+const PRACTICE_TASKS = [
+  { id:1, title:"Разработка мобильного приложения", subject:"Flutter", deadline:"30.04.2026", done:85, status:"В процессе", comment:"Хорошее начало, доработайте навигацию", teacher:"Иванова А." },
+  { id:2, title:"Лабораторная №3: Сортировки", subject:"Алгоритмы", deadline:"20.04.2026", done:100, status:"Сдано", comment:"Отлично! Все алгоритмы реализованы корректно.", teacher:"Петров С." },
+  { id:3, title:"Проектирование БД", subject:"Базы данных", deadline:"05.05.2026", done:40, status:"В процессе", comment:"Нормализация не завершена", teacher:"Ли О." },
+  { id:4, title:"Отчет по производственной практике", subject:"Практика", deadline:"15.05.2026", done:10, status:"Не начато", comment:"Ожидаю черновик отчёта", teacher:"Сидоров К." },
+  { id:5, title:"Курсовая работа", subject:"Программирование", deadline:"01.06.2026", done:60, status:"В процессе", comment:"Хорошая структура, продолжайте", teacher:"Иванова А." },
+];
 
-class Event {
-  final String id;
-  final String title;
-  final String description;
-  final String date;
-  final String location;
-  const Event({
-    required this.id,
-    required this.title,
-    required this.description,
-    required this.date,
-    required this.location,
-  });
-}
+const SUPPORT_CHATS = [
+  { id:1, name:"Деканат", avatar:"🏛️", lastMsg:"Ваше обращение принято", time:"10:30", unread:0 },
+  { id:2, name:"Иванова А. (Куратор)", avatar:"👩‍🏫", lastMsg:"Жду отчёт до пятницы", time:"09:15", unread:2 },
+  { id:3, name:"Петров С. (Алгоритмы)", avatar:"👨‍💼", lastMsg:"Лаба зачтена ✓", time:"Вчера", unread:0 },
+  { id:4, name:"IT-поддержка", avatar:"💻", lastMsg:"Ваш запрос #1042 решён", time:"Пн", unread:1 },
+];
 
-class Announcement {
-  final String author;
-  final String time;
-  final String message;
-  const Announcement({
-    required this.author,
-    required this.time,
-    required this.message,
-  });
-}
+const FAQ = [
+  { q:"Как получить справку об обучении?", a:"Обратитесь в деканат (каб. 205) или подайте заявку через приложение. Срок: 3 рабочих дня." },
+  { q:"Где узнать расписание экзаменов?", a:"Расписание публикуется в разделе «Расписание» за 2 недели до сессии." },
+  { q:"Как записаться на практику?", a:"Заявки принимаются через раздел «Практика» → «Запись» до 1 апреля." },
+  { q:"Что делать при болезни?", a:"Уведомите куратора и принесите справку в деканат в первый день выхода." },
+];
 
-class CalendarDay {
-  final String weekday;
-  final int date;
-  final bool hasClass;
-  const CalendarDay({
-    required this.weekday,
-    required this.date,
-    required this.hasClass,
-  });
-}
+const MATERIALS = [
+  { id:1, title:"Лекция 1: Введение в Flutter", subject:"Flutter", teacher:"Иванова А.", type:"PDF", size:"2.4 МБ", date:"15.04.2026", status:"new", required:true, viewed:false },
+  { id:2, title:"Практика: Работа со списками", subject:"Flutter", teacher:"Иванова А.", type:"PDF", size:"1.1 МБ", date:"16.04.2026", status:"new", required:true, viewed:false },
+  { id:3, title:"Видеолекция: Алгоритм Дейкстры", subject:"Алгоритмы", teacher:"Петров С.", type:"Video", size:"145 МБ", date:"10.04.2026", status:"viewed", required:false, viewed:true },
+  { id:4, title:"Конспект: Нормализация БД", subject:"Базы данных", teacher:"Ли О.", type:"PDF", size:"890 КБ", date:"08.04.2026", status:"required", required:true, viewed:true },
+  { id:5, title:"Лекция 2: Государственные машины", subject:"Flutter", teacher:"Иванова А.", type:"PDF", size:"3.1 МБ", date:"18.04.2026", status:"new", required:true, viewed:false },
+  { id:6, title:"Задание: Курсовая работа", subject:"Программирование", teacher:"Иванова А.", type:"DOC", size:"120 КБ", date:"01.04.2026", status:"required", required:true, viewed:true },
+];
 
-class ScheduleClass {
-  final String title;
-  final String subtitle;
-  final String time;
-  final String teacher;
-  final String room;
-  const ScheduleClass({
-    required this.title,
-    required this.subtitle,
-    required this.time,
-    required this.teacher,
-    required this.room,
-  });
-}
+const ACTIVITY = [
+  { icon:"📚", text:"Взяли книгу «Flutter в действии»", time:"2 ч. назад" },
+  { icon:"✅", text:"Сдана лабораторная №3", time:"Вчера" },
+  { icon:"📬", text:"Новое сообщение от куратора", time:"Вчера" },
+  { icon:"📄", text:"Просмотрен материал «Нормализация БД»", time:"2 дня назад" },
+  { icon:"🏛️", text:"Забронирована аудитория 201", time:"3 дня назад" },
+];
 
-class ChatMessage {
-  final String text;
-  final bool isUser;
-  const ChatMessage({required this.text, required this.isUser});
-}
+// ═══════════════════════════════════════════════════
+// SHARED UI COMPONENTS
+// ═══════════════════════════════════════════════════
+const Badge = ({ color = T.indigo, bg, children, small }) => (
+  <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding: small ? "2px 8px":"4px 10px", borderRadius:T.radius.full, background: bg || color+"18", color, fontSize: small ? 10:11, fontWeight:700, letterSpacing:.3, whiteSpace:"nowrap" }}>
+    {children}
+  </span>
+);
 
-// ─────────────────────────────────────────────────────────────────
-// СОСТОЯНИЕ ПРИЛОЖЕНИЯ (ChangeNotifier — нет God-Widget)
-// ─────────────────────────────────────────────────────────────────
-class AppState extends ChangeNotifier {
-  bool _loggedIn = false;
-  String _userName = '';
-  ThemeMode _themeMode = ThemeMode.light;
-  Locale _locale = const Locale('ru');
-  bool _notifyClasses = true;
-  bool _notifyAnnouncements = true;
-  bool _notifyEvents = true;
-  // Настраиваемый URL Ollama — можно менять в профиле
-  String _ollamaUrl = 'http://localhost:11434';
+const Pill = ({ active, onClick, children }) => (
+  <button onClick={onClick} style={{ padding:"6px 14px", borderRadius:T.radius.full, border:`1.5px solid ${active ? T.indigo : T.slate200}`, background: active ? T.indigo : T.white, color: active ? T.white : T.slate600, fontSize:12, fontWeight:600, cursor:"pointer", transition:"all .15s", whiteSpace:"nowrap" }}>
+    {children}
+  </button>
+);
 
-  bool get loggedIn => _loggedIn;
-  String get userName => _userName;
-  ThemeMode get themeMode => _themeMode;
-  Locale get locale => _locale;
-  bool get notifyClasses => _notifyClasses;
-  bool get notifyAnnouncements => _notifyAnnouncements;
-  bool get notifyEvents => _notifyEvents;
-  String get ollamaUrl => _ollamaUrl;
+const Card = ({ children, style = {}, onClick, hover = true }) => {
+  const [hov, setHov] = useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={() => hover && setHov(true)} onMouseLeave={() => setHov(false)} style={{ background:T.white, borderRadius:T.radius.lg, border:`1px solid ${T.slate200}`, boxShadow: hov ? T.shadow.md : T.shadow.sm, transition:"all .18s", cursor: onClick ? "pointer":"default", transform: hov && hover ? "translateY(-1px)":"none", ...style }}>
+      {children}
+    </div>
+  );
+};
 
-  void login(String name) {
-    _loggedIn = true;
-    _userName = name;
-    notifyListeners();
-  }
+const ProgressBar = ({ value, color = T.indigo, height = 6 }) => (
+  <div style={{ height, borderRadius:T.radius.full, background:T.slate100, overflow:"hidden" }}>
+    <div style={{ height:"100%", width:`${value}%`, borderRadius:T.radius.full, background: value === 100 ? T.emerald : color, transition:"width .5s ease" }} />
+  </div>
+);
 
-  void logout() {
-    _loggedIn = false;
-    _userName = '';
-    notifyListeners();
-  }
+const SearchBar = ({ value, onChange, placeholder }) => (
+  <div style={{ position:"relative" }}>
+    <span style={{ position:"absolute", left:12, top:"50%", transform:"translateY(-50%)", fontSize:16 }}>🔍</span>
+    <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={{ width:"100%", padding:"10px 14px 10px 38px", border:`1.5px solid ${T.slate200}`, borderRadius:T.radius.md, fontSize:13, color:T.slate800, background:T.slate50, outline:"none", boxSizing:"border-box", fontFamily:"inherit" }} onFocus={e => e.target.style.borderColor = T.indigo} onBlur={e => e.target.style.borderColor = T.slate200} />
+  </div>
+);
 
-  void setTheme(bool isDark) {
-    _themeMode = isDark ? ThemeMode.dark : ThemeMode.light;
-    notifyListeners();
-  }
+const SectionHeader = ({ title, subtitle, icon, action }) => (
+  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+      <span style={{ fontSize:22 }}>{icon}</span>
+      <div>
+        <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:T.slate800 }}>{title}</h2>
+        {subtitle && <p style={{ margin:0, fontSize:12, color:T.slate500, marginTop:2 }}>{subtitle}</p>}
+      </div>
+    </div>
+    {action}
+  </div>
+);
 
-  void setLocale(Locale locale) {
-    _locale = locale;
-    notifyListeners();
-  }
+const EmptyState = ({ icon, text }) => (
+  <div style={{ textAlign:"center", padding:"40px 20px", color:T.slate400 }}>
+    <div style={{ fontSize:48, marginBottom:12 }}>{icon}</div>
+    <p style={{ fontSize:13, margin:0 }}>{text}</p>
+  </div>
+);
 
-  void setNotifyClasses(bool v) { _notifyClasses = v; notifyListeners(); }
-  void setNotifyAnnouncements(bool v) { _notifyAnnouncements = v; notifyListeners(); }
-  void setNotifyEvents(bool v) { _notifyEvents = v; notifyListeners(); }
-  void setOllamaUrl(String url) { _ollamaUrl = url.trim(); notifyListeners(); }
-}
+// ═══════════════════════════════════════════════════
+// 1. HOME SCREEN
+// ═══════════════════════════════════════════════════
+const modules = [
+  { id:"profile",   icon:"👤", label:"Профиль",    color:T.indigo,   bg:T.indigoLight },
+  { id:"library",   icon:"📚", label:"Библиотека", color:T.teal,     bg:T.tealLight },
+  { id:"rooms",     icon:"🏫", label:"Кабинеты",   color:T.amber,    bg:T.amberLight },
+  { id:"practice",  icon:"🛠️", label:"Практика",   color:T.emerald,  bg:T.emeraldLight },
+  { id:"support",   icon:"💬", label:"Поддержка",  color:T.sky,      bg:T.skyLight },
+  { id:"materials", icon:"📖", label:"Материалы",  color:T.violet,   bg:T.violetLight },
+  { id:"map",       icon:"🗺️", label:"Карта",      color:T.rose,     bg:T.roseLight },
+  { id:"schedule",  icon:"📅", label:"Расписание", color:T.amber,    bg:T.amberLight },
+];
 
-// ─────────────────────────────────────────────────────────────────
-// ЛОКАЛИЗАЦИЯ (типизированные геттеры — нет magic-string ключей)
-// ─────────────────────────────────────────────────────────────────
-class AppL10n {
-  final Locale locale;
-  const AppL10n(this.locale);
+function HomeScreen({ onNavigate }) {
+  const [favorites, setFavorites] = useState(["profile","library","rooms","practice"]);
+  const [editMode, setEditMode] = useState(false);
 
-  static AppL10n of(BuildContext context) {
-    final state = context.dependOnInheritedWidgetOfExactType<_AppStateScope>()!.state;
-    return AppL10n(state.locale);
-  }
+  const toggle = (id) => setFavorites(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
-  bool get _isKk => locale.languageCode == 'kk';
+  return (
+    <div style={{ padding:"20px 16px" }}>
+      {/* Hero greeting */}
+      <div style={{ background:`linear-gradient(135deg, ${T.indigo} 0%, ${T.violet} 100%)`, borderRadius:T.radius.xl, padding:"20px 22px", marginBottom:22, color:T.white, position:"relative", overflow:"hidden" }}>
+        <div style={{ position:"absolute", right:-20, top:-20, width:120, height:120, borderRadius:"50%", background:"rgba(255,255,255,.08)" }} />
+        <div style={{ position:"absolute", right:20, top:10, width:60, height:60, borderRadius:"50%", background:"rgba(255,255,255,.1)" }} />
+        <p style={{ margin:"0 0 4px", fontSize:12, opacity:.8 }}>Добро пожаловать 👋</p>
+        <h2 style={{ margin:"0 0 6px", fontSize:20, fontWeight:800, letterSpacing:"-.3px" }}>Иван Иванов</h2>
+        <p style={{ margin:0, fontSize:12, opacity:.75 }}>ИС-25-3 · Информационные системы</p>
+        <div style={{ display:"flex", gap:12, marginTop:14 }}>
+          {[["4.2","Средний балл"],["86","Кредитов"],["3","Должников"]].map(([v,l]) => (
+            <div key={l} style={{ textAlign:"center" }}>
+              <div style={{ fontSize:18, fontWeight:800 }}>{v}</div>
+              <div style={{ fontSize:10, opacity:.75 }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
 
-  String get appTitle => 'CollegeDu';
-  String get welcomeTitle => _isKk ? 'CollegeDu қосымшасына қош келдіңіз' : 'Добро пожаловать в CollegeDu';
-  String get welcomeSubtitle => _isKk ? 'Оқу қосымшасының мысалы — кіріп жалғастырыңыз.' : 'Пример учебного приложения — войдите, чтобы продолжить.';
-  String get nameLabel => _isKk ? 'Аты-жөні' : 'ФИО';
-  String get loginButton => _isKk ? 'Кіру' : 'Войти';
-  String get emptyNameError => _isKk ? 'Атыңызды енгізіңіз' : 'Пожалуйста, введите имя';
-  String get testDataHint => _isKk ? 'Немесе тест деректерін қолданыңыз' : 'Или используйте тестовые данные';
-  String get demoNote => 'CollegeDu — demo';
-  String greet(String name) => _isKk ? 'Сәлем, $name' : 'Привет, $name';
-  String get myCourses => _isKk ? 'Менің курстарым' : 'Мои курсы';
-  String get newsTitle => _isKk ? 'Жаңалықтар' : 'Новости';
-  String get viewMenuButton => _isKk ? 'Асхана мәзірін қарау' : 'Посмотреть меню столовой';
-  String get showScheduleButton => _isKk ? 'Кестені көрсету' : 'Показать расписание';
-  String get weekInfo => _isKk ? '2 апта' : '2 недели';
-  String get scheduleTitle => _isKk ? 'Кесте' : 'Расписание';
-  String get coursesTitle => _isKk ? 'Курстар' : 'Курсы';
-  String get materialsTitle => _isKk ? 'Материалдар' : 'Материалы';
-  String get lecture1 => _isKk ? '1 дәріс — Кіріспе' : 'Лекция 1 — Введение';
-  String get practice1 => _isKk ? '1 тәжірибе' : 'Практика 1';
-  String get menuPageTitle => _isKk ? 'Асхана мәзірі' : 'Меню столовой';
-  String get preorderButton => _isKk ? 'Алдын ала тапсырыс' : 'Предзаказать';
-  String itemAdded(String name) => _isKk ? '$name себетке қосылды' : '$name добавлено в корзину';
-  String get journalTitle => _isKk ? 'Табель' : 'Журнал';
-  String get journalSubtitle => _isKk ? '2 семестр үшін бағалар' : 'Успеваемость за 2 семестра';
-  String get semesterLabel => _isKk ? 'Семестр' : 'Семестр';
-  String get averageLabel => _isKk ? 'Орташа' : 'Средний';
-  String get profileTitle => _isKk ? 'Профиль' : 'Профиль';
-  String get studentGroup => _isKk ? 'Топ: ИС-25-3' : 'Группа: ИС-25-3';
-  String get specialty => _isKk ? 'Мамандығы: Бағдарламалық инженерия' : 'Специальность: Программная инженерия';
-  String get studentGpa => _isKk ? 'Бағалау: 4.2' : 'Успеваемость: 4.2';
-  String get studentCredits => _isKk ? 'Кредиттер: 86' : 'Кредиты: 86';
-  String get emailLabel => 'email@college.edu';
-  String get phoneLabel => '+7 700 000 0000';
-  String get notificationsTitle => _isKk ? 'Хабарламалар параметрлері' : 'Настройки уведомлений';
-  String get notifyClasses => _isKk ? 'Сабақтарға ескерту' : 'Напоминания о парах';
-  String get notifyAnnouncements => _isKk ? 'Хабарландырулар туралы ескерту' : 'Уведомления об объявлениях';
-  String get notifyEvents => _isKk ? 'Оқиғалар туралы ескерту' : 'Уведомления о событиях';
-  String get groupChatTitle => _isKk ? 'Топтық чат' : 'Чат группы';
-  String get onlyCurator => _isKk ? 'Тек куратор жазады' : 'Здесь пишет только куратор';
-  String get openAnnouncements => _isKk ? 'Хабарландыруларды ашу' : 'Открыть объявления';
-  String get curatorOnlyNote => _isKk
-      ? 'Бұл чатта тек куратор хабарламалар жариялайды.'
-      : 'В этом чате публикует только куратор.';
-  String get cartTitle => _isKk ? 'Тапсырыс себеті' : 'Корзина заказа';
-  String get cartEmpty => _isKk ? 'Себет бос' : 'Корзина пуста';
-  String get total => _isKk ? 'Барлығы:' : 'Итого:';
-  String get payNow => _isKk ? 'Онлайн төлеу' : 'Оплатить онлайн';
-  String get orderConfirmed => _isKk ? 'Тапсырыс қабылданды' : 'Заказ принят';
-  String get pickupReady => _isKk
-      ? 'Тапсырыс 15 минут ішінде дайын болады. Кешіктпей келіңіз.'
-      : 'Заказ будет готов через 15 минут. Подойдите без задержек.';
-  String get logoutTitle => _isKk ? 'Шығу' : 'Выход';
-  String get logoutConfirm => _isKk ? 'Шығатыныңызға сенімдісіз бе?' : 'Вы действительно хотите выйти?';
-  String get cancel => _isKk ? 'Болдырмау' : 'Отмена';
-  String get logoutButton => _isKk ? 'Шығу' : 'Выйти';
-  String get darkMode => _isKk ? 'Қара режим' : 'Темная тема';
-  String get lightThemeLabel => _isKk ? 'Жарық режим' : 'Светлая тема';
-  String get darkThemeLabel => _isKk ? 'Қара режим қосылған' : 'Темная тема включена';
-  String get changeLanguage => _isKk ? 'Тіл' : 'Язык интерфейса';
-  String get languageRussian => _isKk ? 'Орысша' : 'Русский';
-  String get languageKazakh => 'Қазақша';
-  String get allFilter => _isKk ? 'Барлығы' : 'Все';
-  String get close => _isKk ? 'Жабу' : 'Закрыть';
-  String get upcomingEvents => _isKk ? 'Алдағы оқиғалар' : 'Предстоящие события';
-  String get eventDate => _isKk ? 'Күні' : 'Дата';
-  String get eventLocation => _isKk ? 'Орын' : 'Место';
-  String get aiAssistantTitle => _isKk ? 'ЖИ көмекші' : 'ИИ-помощник';
-  String get send => _isKk ? 'Жіберу' : 'Отправить';
-  String get aiPlaceholder => _isKk ? 'Сұрақ қойыңыз...' : 'Задайте вопрос...';
-  String get quickQuestions => _isKk ? 'Жылдам сұрақтар' : 'Быстрые вопросы';
-  String get aiThinking => _isKk ? 'ЖИ жауап дайындауда...' : 'ИИ готовит ответ...';
-  String get homeTab => _isKk ? 'Басты' : 'Главная';
-  String get announcementsTitle => _isKk ? 'Хабарландырулар' : 'Объявления';
-  String get ollamaUrlLabel => _isKk ? 'Ollama URL' : 'Ollama URL';
-  String get ollamaUrlHint => 'http://192.168.X.X:11434';
-  String get saveButton => _isKk ? 'Сақтау' : 'Сохранить';
+      {/* Quick notifications */}
+      <div style={{ display:"flex", gap:10, marginBottom:22, overflowX:"auto", paddingBottom:4 }}>
+        {[
+          { icon:"📬", text:"2 новых сообщения", color:T.sky },
+          { icon:"⚠️", text:"Срок сдачи завтра", color:T.rose },
+          { icon:"📚", text:"Книга готова", color:T.emerald },
+        ].map(n => (
+          <div key={n.text} style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 13px", background:n.color+"12", border:`1px solid ${n.color}30`, borderRadius:T.radius.full, cursor:"pointer", whiteSpace:"nowrap", flexShrink:0 }}>
+            <span style={{ fontSize:13 }}>{n.icon}</span>
+            <span style={{ fontSize:11, color:n.color, fontWeight:600 }}>{n.text}</span>
+          </div>
+        ))}
+      </div>
 
-  // Быстрые вопросы — хранятся как пары текст/ответ, не как ключи локализации
-  List<({String question, String answer})> get quickQA => _isKk
-      ? [
-          (question: 'Математика курсы туралы', answer: 'Математика курсы алгебра, геометрия және анализды қамтиды. Дүйсенбі сайын 9:00-да дәріс.'),
-          (question: 'Бүгінгі кесте қандай?', answer: 'Бүгін: Математика 9:00-10:30, Бағдарламалау 11:00-12:30.'),
-          (question: 'Физика есебіне көмек', answer: 'Әрине! Есепті толығырақ айтыңыз, көмектесемін.'),
-          (question: 'Асхана мәзірінде не бар?', answer: 'Бүгін: Борщ, котлет картоппен, қызылша салаты.'),
-        ]
-      : [
-          (question: 'Расскажи о курсе математики', answer: 'Курс математики включает алгебру, геометрию и анализ. Лекции по понедельникам в 9:00.'),
-          (question: 'Какое расписание на сегодня?', answer: 'Сегодня: Математика 9:00-10:30, Программирование 11:00-12:30.'),
-          (question: 'Помоги с задачей по физике', answer: 'Конечно! Расскажите подробнее о задаче, и я помогу.'),
-          (question: 'Что в меню столовой?', answer: 'Сегодня: Борщ, котлета с картошкой, салат из свеклы.'),
-        ];
-}
+      {/* Favourite modules */}
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
+        <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:T.slate700 }}>Быстрый доступ</h3>
+        <button onClick={() => setEditMode(e => !e)} style={{ padding:"4px 12px", border:`1px solid ${T.slate200}`, borderRadius:T.radius.full, background:editMode ? T.indigoLight : T.white, color: editMode ? T.indigo : T.slate500, fontSize:11, fontWeight:600, cursor:"pointer" }}>
+          {editMode ? "✓ Готово" : "✏️ Настроить"}
+        </button>
+      </div>
 
-// ─────────────────────────────────────────────────────────────────
-// InheritedWidget для AppState (минимальный, без Provider-пакета)
-// ─────────────────────────────────────────────────────────────────
-class _AppStateScope extends InheritedNotifier<AppState> {
-  const _AppStateScope({required AppState state, required super.child})
-      : super(notifier: state);
-
-  AppState get state => notifier!;
-
-  static AppState of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<_AppStateScope>()!.state;
-}
-
-// ─────────────────────────────────────────────────────────────────
-// КОРНЕВОЙ ВИДЖЕТ
-// ─────────────────────────────────────────────────────────────────
-class CollegeDuApp extends StatefulWidget {
-  const CollegeDuApp({super.key});
-
-  @override
-  State<CollegeDuApp> createState() => _CollegeDuAppState();
-}
-
-class _CollegeDuAppState extends State<CollegeDuApp> {
-  final _appState = AppState();
-
-  @override
-  void dispose() {
-    _appState.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _AppStateScope(
-      state: _appState,
-      child: ListenableBuilder(
-        listenable: _appState,
-        builder: (context, _) {
-          return MaterialApp(
-            title: 'CollegeDu',
-            debugShowCheckedModeBanner: false,
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            supportedLocales: const [Locale('ru'), Locale('kk')],
-            locale: _appState.locale,
-            themeMode: _appState.themeMode,
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-              useMaterial3: true,
-            ),
-            darkTheme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.indigo,
-                brightness: Brightness.dark,
-              ),
-              useMaterial3: true,
-            ),
-            home: _appState.loggedIn
-                ? MainScreen(userName: _appState.userName)
-                : const LoginScreen(),
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:22 }}>
+        {modules.map(m => {
+          const isFav = favorites.includes(m.id);
+          const show = !editMode ? isFav : true;
+          if (!show && !editMode) return null;
+          return (
+            <div key={m.id} onClick={() => editMode ? toggle(m.id) : onNavigate(m.id)} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:6, padding:"14px 8px", background: isFav || editMode ? m.bg : T.slate50, borderRadius:T.radius.md, border:`2px solid ${editMode ? (isFav ? m.color : T.slate200) : "transparent"}`, cursor:"pointer", transition:"all .15s", position:"relative", opacity: editMode && !isFav ? .5 : 1 }}>
+              {editMode && <div style={{ position:"absolute", top:4, right:4, width:16, height:16, borderRadius:"50%", background: isFav ? T.emerald : T.slate300, display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, color:T.white }}>{isFav ? "✓" : "+"}</div>}
+              <span style={{ fontSize:26 }}>{m.icon}</span>
+              <span style={{ fontSize:10, fontWeight:700, color:T.slate600, textAlign:"center", lineHeight:1.2 }}>{m.label}</span>
+            </div>
           );
-        },
-      ),
+        })}
+      </div>
+
+      {/* Today's schedule preview */}
+      <h3 style={{ margin:"0 0 12px", fontSize:14, fontWeight:700, color:T.slate700 }}>Сегодня, вторник</h3>
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {[
+          { time:"08:30", end:"09:50", subj:"Информатика", room:"216", type:"Лекция", done:true },
+          { time:"09:55", end:"11:15", subj:"Биология", room:"217", type:"Лекция", current:true },
+          { time:"11:30", end:"12:50", subj:"Flutter", room:"Лаб.2", type:"Практика" },
+        ].map(c => (
+          <Card key={c.time} style={{ padding:"12px 14px", borderLeft:`3px solid ${c.current ? T.indigo : c.done ? T.emerald : T.slate300}` }}>
+            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+              <div style={{ textAlign:"center", minWidth:40 }}>
+                <div style={{ fontSize:13, fontWeight:800, color: c.current ? T.indigo : T.slate800 }}>{c.time}</div>
+                <div style={{ fontSize:10, color:T.slate400 }}>{c.end}</div>
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>{c.subj}</div>
+                <div style={{ fontSize:11, color:T.slate500 }}>Ауд. {c.room} · {c.type}</div>
+              </div>
+              {c.current && <Badge color={T.indigo}>Сейчас</Badge>}
+              {c.done && <span style={{ fontSize:16 }}>✅</span>}
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// 2. PROFILE SCREEN
+// ═══════════════════════════════════════════════════
+function ProfileScreen() {
+  const [tab, setTab] = useState("info");
+  const grades = [
+    { subj:"Математика", s1:4, s2:5, avg:4.5 },
+    { subj:"Программирование", s1:5, s2:5, avg:5.0 },
+    { subj:"Физика", s1:4, s2:4, avg:4.0 },
+    { subj:"Базы данных", s1:5, s2:4, avg:4.5 },
+    { subj:"Қазақ тілі", s1:4, s2:4, avg:4.0 },
+    { subj:"Алгоритмы", s1:5, s2:5, avg:5.0 },
+  ];
+
+  return (
+    <div style={{ padding:"20px 16px" }}>
+      {/* Profile header */}
+      <div style={{ display:"flex", alignItems:"center", gap:16, marginBottom:22, padding:"16px", background:T.indigoLight, borderRadius:T.radius.lg, border:`1px solid ${T.indigo}20` }}>
+        <div style={{ width:64, height:64, borderRadius:"50%", background:`linear-gradient(135deg,${T.indigo},${T.violet})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, color:T.white, fontWeight:800, flexShrink:0 }}>И</div>
+        <div style={{ flex:1 }}>
+          <h2 style={{ margin:"0 0 3px", fontSize:18, fontWeight:800, color:T.slate800 }}>Иван Иванов</h2>
+          <p style={{ margin:"0 0 6px", fontSize:12, color:T.slate500 }}>Группа ИС-25-3 · Студент</p>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+            <Badge color={T.indigo}>4.2 GPA</Badge>
+            <Badge color={T.emerald}>86 кредитов</Badge>
+            <Badge color={T.amber}>3 курс</Badge>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display:"flex", gap:6, marginBottom:18, overflowX:"auto", paddingBottom:4 }}>
+        {[["info","👤 Данные"],["grades","📊 Успев."],["progress","📈 Прогресс"],["activity","🕐 Активность"]].map(([id,label]) => (
+          <Pill key={id} active={tab===id} onClick={() => setTab(id)}>{label}</Pill>
+        ))}
+      </div>
+
+      {tab === "info" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {[["ФИО","Иванов Иван Иванович","👤"],["Специальность","Информационные системы","🎓"],["Группа","ИС-25-3","👥"],["Зачётная книжка","№ 2025-1842","📋"],["Email","ivanov@college.edu","📧"],["Телефон","+7 701 234 5678","📞"],["Куратор","Иванова А.И.","👩‍🏫"],["Дата рождения","15.03.2006","🎂"]].map(([k,v,ic]) => (
+            <Card key={k} style={{ padding:"12px 16px" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <span style={{ fontSize:20, width:28, textAlign:"center" }}>{ic}</span>
+                <div>
+                  <div style={{ fontSize:10, color:T.slate400, fontWeight:600, textTransform:"uppercase", letterSpacing:.5 }}>{k}</div>
+                  <div style={{ fontSize:14, color:T.slate800, fontWeight:500 }}>{v}</div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "grades" && (
+        <div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10, marginBottom:16 }}>
+            {[["4.2","Средний балл",T.indigo],["86","Кредитов",T.emerald],["95%","Посещаемость",T.teal]].map(([v,l,c]) => (
+              <Card key={l} style={{ padding:"14px 10px", textAlign:"center" }}>
+                <div style={{ fontSize:22, fontWeight:800, color:c }}>{v}</div>
+                <div style={{ fontSize:10, color:T.slate500, marginTop:3 }}>{l}</div>
+              </Card>
+            ))}
+          </div>
+          {grades.map(g => (
+            <Card key={g.subj} style={{ padding:"12px 16px", marginBottom:8 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+                <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>{g.subj}</span>
+                <span style={{ fontSize:16, fontWeight:800, color: g.avg >= 4.5 ? T.emerald : g.avg >= 4 ? T.indigo : T.amber }}>{g.avg}</span>
+              </div>
+              <ProgressBar value={g.avg / 5 * 100} color={g.avg >= 4.5 ? T.emerald : g.avg >= 4 ? T.indigo : T.amber} />
+              <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
+                <span style={{ fontSize:10, color:T.slate400 }}>Сем. 1: {g.s1}</span>
+                <span style={{ fontSize:10, color:T.slate400 }}>Сем. 2: {g.s2}</span>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "progress" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <Card style={{ padding:18 }}>
+            <h3 style={{ margin:"0 0 14px", fontSize:14, fontWeight:700, color:T.slate700 }}>Общий прогресс обучения</h3>
+            <div style={{ textAlign:"center", marginBottom:16 }}>
+              <div style={{ fontSize:48, fontWeight:900, color:T.indigo }}>72%</div>
+              <div style={{ fontSize:12, color:T.slate500 }}>3 из 4 лет обучения</div>
+            </div>
+            <ProgressBar value={72} height={10} />
+          </Card>
+          {[["Сданные дисциплины","18 / 24",75,T.indigo],["Практика","3 / 4 модуля",75,T.teal],["Курсовые работы","2 / 3",67,T.violet],["Кредиты","86 / 120",72,T.emerald]].map(([label,val,pct,color]) => (
+            <Card key={label} style={{ padding:"14px 16px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+                <span style={{ fontSize:13, fontWeight:600, color:T.slate700 }}>{label}</span>
+                <span style={{ fontSize:13, fontWeight:700, color }}>{val}</span>
+              </div>
+              <ProgressBar value={pct} color={color} height={7} />
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "activity" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {ACTIVITY.map((a, i) => (
+            <Card key={i} style={{ padding:"12px 16px" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <span style={{ fontSize:22 }}>{a.icon}</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, color:T.slate700 }}>{a.text}</div>
+                  <div style={{ fontSize:11, color:T.slate400, marginTop:2 }}>{a.time}</div>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// 3. LIBRARY SCREEN
+// ═══════════════════════════════════════════════════
+function LibraryScreen() {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("Все");
+  const [booked, setBooked] = useState([]);
+  const [detail, setDetail] = useState(null);
+  const subjects = ["Все", ...new Set(BOOKS.map(b => b.subject))];
+  const shown = BOOKS.filter(b => {
+    const matchSearch = b.title.toLowerCase().includes(search.toLowerCase()) || b.author.toLowerCase().includes(search.toLowerCase());
+    const matchFilter = filter === "Все" || b.subject === filter;
+    return matchSearch && matchFilter;
+  });
+
+  const book = (b) => { setBooked(p => p.includes(b.id) ? p.filter(x => x !== b.id) : [...p, b.id]); setDetail(null); };
+
+  if (detail) {
+    const b = detail;
+    return (
+      <div style={{ padding:"20px 16px" }}>
+        <button onClick={() => setDetail(null)} style={{ border:"none", background:"none", fontSize:14, color:T.indigo, cursor:"pointer", marginBottom:16, padding:0, display:"flex", alignItems:"center", gap:6, fontWeight:600 }}>← Назад в библиотеку</button>
+        <Card style={{ padding:22, textAlign:"center", marginBottom:16 }}>
+          <div style={{ fontSize:72, marginBottom:10 }}>{b.cover}</div>
+          <h2 style={{ margin:"0 0 6px", fontSize:18, fontWeight:800, color:T.slate800 }}>{b.title}</h2>
+          <p style={{ margin:"0 0 12px", color:T.slate500 }}>{b.author}</p>
+          <Badge color={b.available ? T.emerald : T.rose}>{b.available ? "В наличии" : "Выдано"}</Badge>
+        </Card>
+        <Card style={{ padding:16, marginBottom:12 }}>
+          {[["Предмет",b.subject],["Экземпляров",`${b.total - b.onHand} / ${b.total}`],["На руках",`${b.onHand} шт.`]].map(([k,v]) => (
+            <div key={k} style={{ display:"flex", justifyContent:"space-between", padding:"8px 0", borderBottom:`1px solid ${T.slate100}` }}>
+              <span style={{ fontSize:13, color:T.slate500 }}>{k}</span>
+              <span style={{ fontSize:13, fontWeight:600, color:T.slate800 }}>{v}</span>
+            </div>
+          ))}
+        </Card>
+        <button onClick={() => book(b)} disabled={!b.available && !booked.includes(b.id)} style={{ width:"100%", padding:"13px", borderRadius:T.radius.md, border:"none", background: booked.includes(b.id) ? T.roseLight : (b.available ? T.indigo : T.slate200), color: booked.includes(b.id) ? T.rose : (b.available ? T.white : T.slate400), fontSize:14, fontWeight:700, cursor: b.available || booked.includes(b.id) ? "pointer":"not-allowed", transition:"all .15s" }}>
+          {booked.includes(b.id) ? "❌ Отменить бронь" : (b.available ? "📌 Забронировать" : "⏳ Нет в наличии")}
+        </button>
+      </div>
     );
   }
+
+  return (
+    <div style={{ padding:"20px 16px" }}>
+      <SectionHeader title="Библиотека" subtitle={`${BOOKS.filter(b=>b.available).length} книг в наличии из ${BOOKS.length}`} icon="📚" />
+      <div style={{ marginBottom:12 }}><SearchBar value={search} onChange={setSearch} placeholder="Поиск книг, авторов..." /></div>
+      <div style={{ display:"flex", gap:7, marginBottom:16, overflowX:"auto", paddingBottom:4 }}>
+        {subjects.map(s => <Pill key={s} active={filter===s} onClick={() => setFilter(s)}>{s}</Pill>)}
+        <Pill active={filter==="available"} onClick={() => setFilter(filter==="available" ? "Все" : "available")}>✅ В наличии</Pill>
+      </div>
+      {booked.length > 0 && (
+        <div style={{ padding:"10px 14px", background:T.emeraldLight, border:`1px solid ${T.emerald}30`, borderRadius:T.radius.md, marginBottom:14, fontSize:12, color:T.emerald, fontWeight:600 }}>
+          📌 Забронировано книг: {booked.length}. Заберите в б-ке в теч. 3 дней.
+        </div>
+      )}
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {shown.length === 0 && <EmptyState icon="📭" text="Ничего не найдено" />}
+        {shown.filter(b => filter !== "available" || b.available).map(b => (
+          <Card key={b.id} onClick={() => setDetail(b)} style={{ padding:"14px 16px" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:13 }}>
+              <span style={{ fontSize:34 }}>{b.cover}</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:T.slate800, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{b.title}</div>
+                <div style={{ fontSize:12, color:T.slate500, marginTop:2 }}>{b.author}</div>
+                <div style={{ display:"flex", gap:7, marginTop:6, flexWrap:"wrap" }}>
+                  <Badge color={T.indigo} small>{b.subject}</Badge>
+                  <Badge color={b.available ? T.emerald : T.rose} small>{b.available ? `✓ ${b.total - b.onHand} экз.` : "Выдано"}</Badge>
+                  {booked.includes(b.id) && <Badge color={T.amber} small>📌 Брон.</Badge>}
+                </div>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────
-// ДАННЫЕ ПРИЛОЖЕНИЯ (единственный источник правды)
-// ─────────────────────────────────────────────────────────────────
-class AppData {
-  static const courses = [
-    Course(id: 'c1', title: 'Математика 1', teacher: 'Проф. Петров', description: 'Базовая математика: алгебра, геометрия.'),
-    Course(id: 'c2', title: 'Программирование', teacher: 'Иванова А.', description: 'Введение в Dart и Flutter.'),
-    Course(id: 'c3', title: 'Физика', teacher: 'Сидоров', description: 'Механика, термодинамика.'),
-  ];
+// ═══════════════════════════════════════════════════
+// 4. ROOMS SCREEN
+// ═══════════════════════════════════════════════════
+function RoomsScreen() {
+  const [filter, setFilter] = useState("Все");
+  const [buildFilter, setBuildFilter] = useState("Все");
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState(null);
+  const types = ["Все","Лекционный","Лаборатория","Практика","Семинар"];
+  const buildings = ["Все","А","Б","В"];
+  const shown = ROOMS.filter(r => {
+    const t = filter === "Все" || r.type === filter;
+    const b = buildFilter === "Все" || r.building === buildFilter;
+    const s = search === "" || r.name.toLowerCase().includes(search.toLowerCase()) || r.type.toLowerCase().includes(search.toLowerCase());
+    return t && b && s;
+  });
+  const freeCount = ROOMS.filter(r => r.free).length;
 
-  static const menuItems = [
-    MenuItem(name: 'Борщ', type: 'Обед', price: 350),
-    MenuItem(name: 'Котлета с картошкой', type: 'Обед', price: 420),
-    MenuItem(name: 'Салат из свеклы', type: 'Закуска', price: 150),
-    MenuItem(name: 'Куриное филе', type: 'Ужин', price: 380),
-    MenuItem(name: 'Вода 0.5л', type: 'Напитки', price: 100),
-  ];
+  if (selected) {
+    const r = selected;
+    return (
+      <div style={{ padding:"20px 16px" }}>
+        <button onClick={() => setSelected(null)} style={{ border:"none", background:"none", fontSize:14, color:T.indigo, cursor:"pointer", marginBottom:16, padding:0, fontWeight:600 }}>← Назад к кабинетам</button>
+        <Card style={{ padding:20 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
+            <div>
+              <h2 style={{ margin:"0 0 4px", fontSize:18, fontWeight:800, color:T.slate800 }}>{r.name}</h2>
+              <p style={{ margin:0, fontSize:13, color:T.slate500 }}>{r.type} · Корпус {r.building} · Этаж {r.floor}</p>
+            </div>
+            <Badge color={r.free ? T.emerald : T.rose}>{r.free ? "🟢 Свободно" : "🔴 Занято"}</Badge>
+          </div>
+          {!r.free && <div style={{ padding:"10px 14px", background:T.roseLight, borderRadius:T.radius.sm, marginBottom:14, fontSize:12, color:T.rose }}>Занято до {r.untilTime} · Группа {r.currentGroup}</div>}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+            {[["Вместимость",`${r.capacity} чел.`,"👥"],["Этаж",r.floor === 0 ? "Цокольный" : `${r.floor} этаж`,"🏢"]].map(([k,v,ic]) => (
+              <div key={k} style={{ padding:"12px", background:T.slate50, borderRadius:T.radius.sm, textAlign:"center" }}>
+                <div style={{ fontSize:20, marginBottom:4 }}>{ic}</div>
+                <div style={{ fontSize:10, color:T.slate500 }}>{k}</div>
+                <div style={{ fontSize:14, fontWeight:700, color:T.slate800 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          <h3 style={{ fontSize:13, fontWeight:700, color:T.slate700, margin:"0 0 10px" }}>Расписание на сегодня</h3>
+          {r.schedule.length === 0 ? <p style={{ fontSize:13, color:T.slate400 }}>Занятий нет</p> : r.schedule.map(sc => (
+            <div key={sc.time} style={{ padding:"10px 13px", background:T.indigoLight, borderRadius:T.radius.sm, marginBottom:8 }}>
+              <div style={{ display:"flex", justifyContent:"space-between" }}>
+                <span style={{ fontSize:13, fontWeight:600, color:T.indigo }}>{sc.time}</span>
+                <span style={{ fontSize:12, color:T.slate500 }}>{sc.group}</span>
+              </div>
+              <div style={{ fontSize:12, color:T.slate600, marginTop:2 }}>{sc.subj}</div>
+            </div>
+          ))}
+          {r.free && <button style={{ width:"100%", marginTop:14, padding:12, background:T.indigo, color:T.white, border:"none", borderRadius:T.radius.md, fontSize:14, fontWeight:700, cursor:"pointer" }}>📌 Забронировать</button>}
+        </Card>
+      </div>
+    );
+  }
 
-  static const grades = [
-    Grade(subject: 'Математика', semester1: 4, semester2: 5, average: 4.5),
-    Grade(subject: 'Программирование', semester1: 5, semester2: 5, average: 5.0),
-    Grade(subject: 'Физика', semester1: 4, semester2: 4, average: 4.0),
-    Grade(subject: 'Химия', semester1: 5, semester2: 4, average: 4.5),
-    Grade(subject: 'Қазақ тілі', semester1: 4, semester2: 4, average: 4.0),
-    Grade(subject: 'Орыс тілі', semester1: 5, semester2: 5, average: 5.0),
-  ];
+  return (
+    <div style={{ padding:"20px 16px" }}>
+      <SectionHeader title="Кабинеты" subtitle={`${freeCount} свободно из ${ROOMS.length}`} icon="🏫"
+        action={<Badge color={T.emerald}>{freeCount} своб.</Badge>} />
+      <div style={{ marginBottom:12 }}><SearchBar value={search} onChange={setSearch} placeholder="Поиск кабинета..." /></div>
+      <div style={{ display:"flex", gap:6, marginBottom:8, overflowX:"auto", paddingBottom:2 }}>
+        {types.map(t => <Pill key={t} active={filter===t} onClick={() => setFilter(t)}>{t}</Pill>)}
+      </div>
+      <div style={{ display:"flex", gap:6, marginBottom:16, overflowX:"auto", paddingBottom:4 }}>
+        {buildings.map(b => <Pill key={b} active={buildFilter===b} onClick={() => setBuildFilter(b)}>{b === "Все" ? "Все корпуса" : `Корп. ${b}`}</Pill>)}
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+        {shown.map(r => (
+          <Card key={r.id} onClick={() => setSelected(r)} style={{ padding:"14px" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+              <span style={{ fontSize:24 }}>{r.type==="Лаборатория"?"🖥️":r.type==="Спортивный"?"⚽":r.type==="Библиотека"?"📚":"🏫"}</span>
+              <div style={{ width:10, height:10, borderRadius:"50%", background: r.free ? T.emerald : T.rose, marginTop:3 }} />
+            </div>
+            <div style={{ fontSize:13, fontWeight:700, color:T.slate800 }}>{r.name}</div>
+            <div style={{ fontSize:11, color:T.slate500, marginTop:2 }}>{r.type}</div>
+            <div style={{ fontSize:11, color:T.slate400, marginTop:3 }}>Корп. {r.building} · {r.capacity} чел.</div>
+            {!r.free && <div style={{ fontSize:10, color:T.rose, marginTop:5, fontWeight:600 }}>до {r.untilTime}</div>}
+            {r.free && <div style={{ fontSize:10, color:T.emerald, marginTop:5, fontWeight:600 }}>Свободно</div>}
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  static const events = [
-    Event(id: 'e1', title: 'Олимпиада по математике', description: 'Международная олимпиада по математике для студентов.', date: '15.05.2026', location: 'Главный зал'),
-    Event(id: 'e2', title: 'Конференция по ИТ', description: 'Ежегодная конференция по ИТ.', date: '20.05.2026', location: 'Аудитория 201'),
-    Event(id: 'e3', title: 'Спортфест', description: 'Фестиваль спортивных мероприятий.', date: '25.05.2026', location: 'Стадион'),
-  ];
+// ═══════════════════════════════════════════════════
+// 5. PRACTICE SCREEN
+// ═══════════════════════════════════════════════════
+function PracticeScreen() {
+  const [tab, setTab] = useState("tasks");
+  const [selected, setSelected] = useState(null);
 
-  static const announcements = [
-    Announcement(author: 'Куратор', time: '09:00', message: 'Собрание группы завтра в 16:00 в аудитории 201.'),
-    Announcement(author: 'Куратор', time: '13:30', message: 'Заполните анкеты для практики до конца недели.'),
-  ];
+  const statusColor = s => s === "Сдано" ? T.emerald : s === "В процессе" ? T.indigo : T.rose;
 
-  // Расписание по индексу дня (0 = ПН, ..., 6 = ВС)
-  static const scheduleByDay = <int, List<ScheduleClass>>{
-    0: [
-      ScheduleClass(title: 'Математика', subtitle: 'Теоретические занятия', time: '08:30-09:50', teacher: 'Проф. Петров', room: '301'),
-      ScheduleClass(title: 'Программирование', subtitle: 'Практика', time: '10:00-11:20', teacher: 'Иванова А.', room: 'Лаб. 2'),
-    ],
-    1: [
-      ScheduleClass(title: 'Информатика', subtitle: 'Теоретические занятия', time: '08:30-09:50', teacher: 'Е. Мирғалыйқызы', room: '216'),
-      ScheduleClass(title: 'Биология', subtitle: 'Теоретические занятия', time: '09:55-11:15', teacher: 'Мирғалыйқызы Ә.', room: '217'),
-      ScheduleClass(title: 'География', subtitle: 'Теоретические занятия', time: '11:30-12:50', teacher: 'А. Сергеев', room: '214'),
-    ],
-    2: [
-      ScheduleClass(title: 'Физика', subtitle: 'Лекция', time: '09:00-10:20', teacher: 'Сидоров', room: '305'),
-      ScheduleClass(title: 'Химия', subtitle: 'Лабораторная работа', time: '10:30-12:00', teacher: 'Ким О.', room: 'Лаб. 1'),
-    ],
-    3: [
-      ScheduleClass(title: 'Математика', subtitle: 'Практика', time: '08:30-09:50', teacher: 'Проф. Петров', room: '301'),
-    ],
-    4: [
-      ScheduleClass(title: 'Программирование', subtitle: 'Проект', time: '11:00-13:00', teacher: 'Иванова А.', room: 'Лаб. 2'),
-    ],
-    5: [],
-    6: [],
+  if (selected) {
+    const t = selected;
+    return (
+      <div style={{ padding:"20px 16px" }}>
+        <button onClick={() => setSelected(null)} style={{ border:"none", background:"none", fontSize:14, color:T.indigo, cursor:"pointer", marginBottom:16, padding:0, fontWeight:600 }}>← Назад к практике</button>
+        <Card style={{ padding:20 }}>
+          <h2 style={{ margin:"0 0 6px", fontSize:17, fontWeight:800, color:T.slate800 }}>{t.title}</h2>
+          <p style={{ margin:"0 0 12px", fontSize:12, color:T.slate500 }}>{t.subject} · {t.teacher}</p>
+          <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+            <Badge color={statusColor(t.status)}>{t.status}</Badge>
+            <Badge color={T.amber}>⏰ {t.deadline}</Badge>
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
+              <span style={{ fontSize:13, fontWeight:600, color:T.slate700 }}>Прогресс выполнения</span>
+              <span style={{ fontSize:14, fontWeight:800, color: t.done === 100 ? T.emerald : T.indigo }}>{t.done}%</span>
+            </div>
+            <ProgressBar value={t.done} color={t.done === 100 ? T.emerald : T.indigo} height={10} />
+          </div>
+          <div style={{ padding:"14px", background:t.done === 100 ? T.emeraldLight : T.indigoLight, borderRadius:T.radius.md, borderLeft:`3px solid ${t.done === 100 ? T.emerald : T.indigo}` }}>
+            <p style={{ margin:"0 0 4px", fontSize:11, fontWeight:700, color:T.slate500, textTransform:"uppercase" }}>Комментарий преподавателя</p>
+            <p style={{ margin:0, fontSize:13, color:T.slate700, lineHeight:1.5 }}>{t.comment}</p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  const overall = Math.round(PRACTICE_TASKS.reduce((s,t) => s + t.done, 0) / PRACTICE_TASKS.length);
+
+  return (
+    <div style={{ padding:"20px 16px" }}>
+      <SectionHeader title="Практика" subtitle="Прогресс и задания" icon="🛠️" />
+      <div style={{ display:"flex", gap:6, marginBottom:18 }}>
+        {[["tasks","📋 Задания"],["stats","📊 Статистика"]].map(([id,l]) => <Pill key={id} active={tab===id} onClick={() => setTab(id)}>{l}</Pill>)}
+      </div>
+
+      {tab === "tasks" && (
+        <div>
+          <Card style={{ padding:18, marginBottom:16, background:`linear-gradient(135deg,${T.indigo}08,${T.violet}08)` }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:T.slate700 }}>Общий прогресс практики</span>
+              <span style={{ fontSize:16, fontWeight:900, color:T.indigo }}>{overall}%</span>
+            </div>
+            <ProgressBar value={overall} height={10} />
+          </Card>
+          {PRACTICE_TASKS.map(t => (
+            <Card key={t.id} onClick={() => setSelected(t)} style={{ padding:"14px 16px", marginBottom:10 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                <div style={{ flex:1, paddingRight:8 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:T.slate800, lineHeight:1.3 }}>{t.title}</div>
+                  <div style={{ fontSize:12, color:T.slate500, marginTop:2 }}>{t.subject} · {t.teacher}</div>
+                </div>
+                <Badge color={statusColor(t.status)} small>{t.status}</Badge>
+              </div>
+              <div style={{ marginBottom:6 }}>
+                <ProgressBar value={t.done} color={t.done === 100 ? T.emerald : T.indigo} height={5} />
+              </div>
+              <div style={{ display:"flex", justifyContent:"space-between" }}>
+                <span style={{ fontSize:11, color:T.slate400 }}>⏰ до {t.deadline}</span>
+                <span style={{ fontSize:11, fontWeight:700, color: t.done === 100 ? T.emerald : T.indigo }}>{t.done}%</span>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "stats" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+            {[["Сдано","2 / 5",T.emerald,"✅"],["Срок сдачи","3 задания",T.rose,"⏰"],["Ср. прогресс",`${overall}%`,T.indigo,"📈"],["Комментариев","5",T.violet,"💬"]].map(([l,v,c,ic]) => (
+              <Card key={l} style={{ padding:"14px", textAlign:"center" }}>
+                <div style={{ fontSize:24, marginBottom:4 }}>{ic}</div>
+                <div style={{ fontSize:18, fontWeight:800, color:c }}>{v}</div>
+                <div style={{ fontSize:10, color:T.slate500 }}>{l}</div>
+              </Card>
+            ))}
+          </div>
+          <Card style={{ padding:18 }}>
+            <h3 style={{ margin:"0 0 12px", fontSize:14, fontWeight:700, color:T.slate700 }}>По предметам</h3>
+            {PRACTICE_TASKS.map(t => (
+              <div key={t.id} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                  <span style={{ fontSize:12, color:T.slate600 }}>{t.subject}</span>
+                  <span style={{ fontSize:12, fontWeight:700, color: t.done===100 ? T.emerald : T.indigo }}>{t.done}%</span>
+                </div>
+                <ProgressBar value={t.done} color={t.done===100 ? T.emerald : T.indigo} height={5} />
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// 6. SUPPORT SCREEN
+// ═══════════════════════════════════════════════════
+function SupportScreen() {
+  const [tab, setTab] = useState("chats");
+  const [activeChat, setActiveChat] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [messages, setMessages] = useState({ 1:[{t:"Добрый день! Чем могу помочь?",isUser:false}], 2:[{t:"Жду отчёт до пятницы",isUser:false}], 3:[{t:"Лаба зачтена ✓",isUser:false}], 4:[{t:"Ваш запрос #1042 решён",isUser:false}] });
+  const [openFaq, setOpenFaq] = useState(null);
+  const [tickets, setTickets] = useState([{id:"#1042",subject:"Не работает доступ к мат-лам",status:"Решено",date:"18.04"},{id:"#1037",subject:"Ошибка в расписании",status:"В работе",date:"15.04"}]);
+  const [newTicket, setNewTicket] = useState("");
+
+  const sendMsg = () => {
+    if (!msg.trim()) return;
+    setMessages(p => ({ ...p, [activeChat]: [...(p[activeChat]||[]), {t:msg, isUser:true}] }));
+    setMsg("");
+    setTimeout(() => {
+      setMessages(p => ({ ...p, [activeChat]: [...(p[activeChat]||[]), {t:"Спасибо за обращение! Ответим в ближайшее время.", isUser:false}] }));
+    }, 800);
   };
 
-  static const calendarDays = [
-    CalendarDay(weekday: 'ПН', date: 6, hasClass: true),
-    CalendarDay(weekday: 'ВТ', date: 7, hasClass: true),
-    CalendarDay(weekday: 'СР', date: 8, hasClass: true),
-    CalendarDay(weekday: 'ЧТ', date: 9, hasClass: true),
-    CalendarDay(weekday: 'ПТ', date: 10, hasClass: true),
-    CalendarDay(weekday: 'СБ', date: 11, hasClass: false),
-    CalendarDay(weekday: 'ВС', date: 12, hasClass: false),
-  ];
-}
-
-// ─────────────────────────────────────────────────────────────────
-// ЭКРАН ВХОДА
-// ─────────────────────────────────────────────────────────────────
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
-
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  final _controller = TextEditingController(text: 'Иван Иванов');
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+  if (activeChat) {
+    const chat = SUPPORT_CHATS.find(c => c.id === activeChat);
+    const msgs = messages[activeChat] || [];
+    return (
+      <div style={{ display:"flex", flexDirection:"column", height:"100%" }}>
+        <div style={{ padding:"14px 16px", borderBottom:`1px solid ${T.slate200}`, display:"flex", alignItems:"center", gap:12 }}>
+          <button onClick={() => setActiveChat(null)} style={{ border:"none", background:"none", fontSize:18, cursor:"pointer", color:T.indigo, padding:0 }}>←</button>
+          <span style={{ fontSize:22 }}>{chat.avatar}</span>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, color:T.slate800 }}>{chat.name}</div>
+            <div style={{ fontSize:11, color:T.emerald }}>● Онлайн</div>
+          </div>
+        </div>
+        <div style={{ flex:1, overflow:"auto", padding:"16px", display:"flex", flexDirection:"column", gap:10 }}>
+          {msgs.map((m,i) => (
+            <div key={i} style={{ display:"flex", justifyContent: m.isUser ? "flex-end":"flex-start" }}>
+              <div style={{ maxWidth:"75%", padding:"10px 14px", borderRadius: m.isUser ? "16px 16px 4px 16px" : "4px 16px 16px 16px", background: m.isUser ? T.indigo : T.slate100, color: m.isUser ? T.white : T.slate800, fontSize:13, lineHeight:1.5 }}>{m.t}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding:"12px 16px", borderTop:`1px solid ${T.slate200}`, display:"flex", gap:8 }}>
+          <input value={msg} onChange={e => setMsg(e.target.value)} onKeyDown={e => e.key==="Enter" && sendMsg()} placeholder="Написать сообщение..." style={{ flex:1, padding:"10px 14px", border:`1.5px solid ${T.slate200}`, borderRadius:T.radius.full, fontSize:13, outline:"none", fontFamily:"inherit" }} />
+          <button onClick={sendMsg} style={{ width:42, height:42, borderRadius:"50%", background:T.indigo, border:"none", color:T.white, fontSize:18, cursor:"pointer" }}>➤</button>
+        </div>
+      </div>
+    );
   }
 
-  void _tryLogin() {
-    final name = _controller.text.trim();
-    final loc = AppL10n.of(context);
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(loc.emptyNameError)),
-      );
-      return;
+  return (
+    <div style={{ padding:"20px 16px" }}>
+      <SectionHeader title="Поддержка" subtitle="Чат, FAQ, обращения" icon="💬" />
+      <div style={{ display:"flex", gap:6, marginBottom:18 }}>
+        {[["chats","💬 Чаты"],["faq","❓ FAQ"],["tickets","📩 Обращения"]].map(([id,l]) => <Pill key={id} active={tab===id} onClick={() => setTab(id)}>{l}</Pill>)}
+      </div>
+
+      {tab === "chats" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {SUPPORT_CHATS.map(c => (
+            <Card key={c.id} onClick={() => setActiveChat(c.id)} style={{ padding:"14px 16px" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                <span style={{ fontSize:28 }}>{c.avatar}</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:T.slate800 }}>{c.name}</div>
+                  <div style={{ fontSize:12, color:T.slate500, marginTop:2 }}>{c.lastMsg}</div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:11, color:T.slate400 }}>{c.time}</div>
+                  {c.unread > 0 && <div style={{ width:20, height:20, borderRadius:"50%", background:T.rose, color:T.white, fontSize:11, fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center", marginTop:4, marginLeft:"auto" }}>{c.unread}</div>}
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "faq" && (
+        <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+          {FAQ.map((f,i) => (
+            <Card key={i} style={{ overflow:"hidden" }}>
+              <div onClick={() => setOpenFaq(openFaq===i ? null : i)} style={{ padding:"14px 16px", display:"flex", alignItems:"center", justifyContent:"space-between", cursor:"pointer" }}>
+                <span style={{ fontSize:13, fontWeight:600, color:T.slate800, flex:1, paddingRight:8 }}>{f.q}</span>
+                <span style={{ fontSize:18, color:T.slate400, transition:"transform .2s", transform: openFaq===i ? "rotate(90deg)":"none" }}>›</span>
+              </div>
+              {openFaq === i && <div style={{ padding:"0 16px 14px", fontSize:13, color:T.slate600, lineHeight:1.6, borderTop:`1px solid ${T.slate100}`, paddingTop:12 }}>{f.a}</div>}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "tickets" && (
+        <div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:16 }}>
+            {tickets.map(t => (
+              <Card key={t.id} style={{ padding:"14px 16px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:700, color:T.slate800 }}>{t.subject}</div>
+                    <div style={{ fontSize:11, color:T.slate400, marginTop:2 }}>{t.id} · {t.date}</div>
+                  </div>
+                  <Badge color={t.status === "Решено" ? T.emerald : T.amber} small>{t.status}</Badge>
+                </div>
+              </Card>
+            ))}
+          </div>
+          <Card style={{ padding:16 }}>
+            <h3 style={{ margin:"0 0 10px", fontSize:13, fontWeight:700, color:T.slate700 }}>Новое обращение</h3>
+            <textarea value={newTicket} onChange={e => setNewTicket(e.target.value)} placeholder="Опишите проблему..." style={{ width:"100%", height:80, padding:10, border:`1.5px solid ${T.slate200}`, borderRadius:T.radius.sm, fontSize:12, fontFamily:"inherit", resize:"none", outline:"none", boxSizing:"border-box" }} />
+            <button onClick={() => { if(newTicket.trim()) { setTickets(p => [{id:`#${1000+p.length+1}`,subject:newTicket,status:"Принято",date:"Сегодня"},...p]); setNewTicket(""); }}} style={{ width:"100%", marginTop:10, padding:10, background:T.indigo, color:T.white, border:"none", borderRadius:T.radius.md, fontSize:13, fontWeight:700, cursor:"pointer" }}>📩 Отправить</button>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// 7. MATERIALS SCREEN
+// ═══════════════════════════════════════════════════
+function MaterialsScreen() {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("Все");
+  const [subjectFilter, setSubjectFilter] = useState("Все");
+  const [viewed, setViewed] = useState(MATERIALS.filter(m=>m.viewed).map(m=>m.id));
+  const [downloaded, setDownloaded] = useState([]);
+  const [openComment, setOpenComment] = useState(null);
+  const subjects = ["Все", ...new Set(MATERIALS.map(m => m.subject))];
+
+  const shown = MATERIALS.filter(m => {
+    const s = search === "" || m.title.toLowerCase().includes(search.toLowerCase());
+    const f = filter === "Все" || (filter === "new" && m.status === "new") || (filter === "required" && m.required) || (filter === "viewed" && viewed.includes(m.id));
+    const sf = subjectFilter === "Все" || m.subject === subjectFilter;
+    return s && f && sf;
+  });
+
+  const typeIcon = t => ({ PDF:"📄", Video:"🎬", DOC:"📝" }[t] || "📎");
+  const typeColor = t => ({ PDF:T.rose, Video:T.violet, DOC:T.sky }[t] || T.slate400);
+
+  return (
+    <div style={{ padding:"20px 16px" }}>
+      <SectionHeader title="Учебные материалы" subtitle={`${MATERIALS.filter(m=>!viewed.includes(m.id)).length} непрочитанных`} icon="📖" />
+      <div style={{ marginBottom:10 }}><SearchBar value={search} onChange={setSearch} placeholder="Поиск материалов..." /></div>
+      <div style={{ display:"flex", gap:6, marginBottom:8, overflowX:"auto", paddingBottom:2 }}>
+        {[["Все","Все"],["new","🆕 Новые"],["required","⚠️ Обяз."],["viewed","👁 Просмотр."]].map(([id,l]) => <Pill key={id} active={filter===id} onClick={() => setFilter(id)}>{l}</Pill>)}
+      </div>
+      <div style={{ display:"flex", gap:6, marginBottom:16, overflowX:"auto", paddingBottom:4 }}>
+        {subjects.map(s => <Pill key={s} active={subjectFilter===s} onClick={() => setSubjectFilter(s)}>{s}</Pill>)}
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {shown.length === 0 && <EmptyState icon="📭" text="Материалы не найдены" />}
+        {shown.map(m => (
+          <Card key={m.id} style={{ padding:"14px 16px" }}>
+            <div style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+              <div style={{ width:42, height:42, borderRadius:T.radius.sm, background:typeColor(m.type)+"15", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, flexShrink:0 }}>{typeIcon(m.type)}</div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:8 }}>
+                  <div style={{ fontSize:14, fontWeight:700, color: viewed.includes(m.id) ? T.slate500 : T.slate800, lineHeight:1.3 }}>{m.title}</div>
+                  {!viewed.includes(m.id) && m.status === "new" && <Badge color={T.rose} small>NEW</Badge>}
+                </div>
+                <div style={{ fontSize:11, color:T.slate500, marginTop:3 }}>{m.subject} · {m.teacher}</div>
+                <div style={{ display:"flex", gap:7, marginTop:7, flexWrap:"wrap", alignItems:"center" }}>
+                  <Badge color={typeColor(m.type)} small>{m.type}</Badge>
+                  <span style={{ fontSize:10, color:T.slate400 }}>{m.size}</span>
+                  <span style={{ fontSize:10, color:T.slate400 }}>{m.date}</span>
+                  {m.required && <Badge color={T.amber} small>⚠️ Обяз.</Badge>}
+                </div>
+                <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                  <button onClick={() => setViewed(p => p.includes(m.id) ? p.filter(x=>x!==m.id) : [...p,m.id])} style={{ padding:"5px 10px", border:`1px solid ${T.slate200}`, borderRadius:T.radius.sm, fontSize:11, background: viewed.includes(m.id) ? T.indigoLight : T.white, color: viewed.includes(m.id) ? T.indigo : T.slate500, cursor:"pointer", fontFamily:"inherit" }}>
+                    {viewed.includes(m.id) ? "👁 Прочитано" : "Отметить"}
+                  </button>
+                  <button onClick={() => setDownloaded(p => p.includes(m.id) ? p.filter(x=>x!==m.id) : [...p,m.id])} style={{ padding:"5px 10px", border:`1px solid ${T.slate200}`, borderRadius:T.radius.sm, fontSize:11, background: downloaded.includes(m.id) ? T.emeraldLight : T.white, color: downloaded.includes(m.id) ? T.emerald : T.slate500, cursor:"pointer", fontFamily:"inherit" }}>
+                    {downloaded.includes(m.id) ? "✅ Скачано" : "⬇ Скачать"}
+                  </button>
+                  <button onClick={() => setOpenComment(openComment===m.id ? null : m.id)} style={{ padding:"5px 10px", border:`1px solid ${T.slate200}`, borderRadius:T.radius.sm, fontSize:11, background:T.white, color:T.slate500, cursor:"pointer", fontFamily:"inherit" }}>💬</button>
+                </div>
+                {openComment === m.id && (
+                  <div style={{ marginTop:10, padding:"10px", background:T.slate50, borderRadius:T.radius.sm }}>
+                    <textarea placeholder="Оставить вопрос или комментарий..." style={{ width:"100%", height:60, padding:8, border:`1px solid ${T.slate200}`, borderRadius:T.radius.sm, fontSize:12, resize:"none", fontFamily:"inherit", boxSizing:"border-box" }} />
+                    <button style={{ marginTop:6, padding:"6px 14px", background:T.indigo, color:T.white, border:"none", borderRadius:T.radius.sm, fontSize:12, cursor:"pointer" }}>Отправить</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// 8. MAP SCREEN (2D interactive floor plan)
+// ═══════════════════════════════════════════════════
+const floorRooms = {
+  1: [
+    { id:"101", x:10, y:10, w:25, h:18, label:"101", type:"lecture", free:true },
+    { id:"102", x:40, y:10, w:25, h:18, label:"102", type:"practice", free:false },
+    { id:"wc1", x:70, y:10, w:10, h:8, label:"WC", type:"wc", free:true },
+    { id:"stairs1", x:83, y:10, w:12, h:12, label:"Лест.", type:"stairs", free:true },
+    { id:"lab1", x:10, y:35, w:35, h:20, label:"Лаб. 1", type:"lab", free:false },
+    { id:"lib", x:50, y:35, w:30, h:20, label:"Библ.", type:"library", free:true },
+    { id:"cafe", x:85, y:35, w:12, h:20, label:"Кафе", type:"cafe", free:true },
+    { id:"dean", x:10, y:62, w:25, h:16, label:"Деканат", type:"admin", free:true },
+    { id:"103", x:40, y:62, w:20, h:16, label:"103", type:"lecture", free:true },
+    { id:"sos", x:65, y:62, w:15, h:16, label:"Медпункт", type:"medical", free:true },
+  ],
+  2: [
+    { id:"201", x:10, y:10, w:30, h:18, label:"201", type:"lecture", free:true },
+    { id:"202", x:45, y:10, w:25, h:18, label:"202", type:"practice", free:true },
+    { id:"lab2", x:10, y:35, w:35, h:20, label:"Лаб. 2 (ПК)", type:"lab", free:true },
+    { id:"305s", x:50, y:35, w:25, h:20, label:"Конф.", type:"seminar", free:true },
+    { id:"wc2", x:78, y:10, w:10, h:8, label:"WC", type:"wc", free:true },
+    { id:"stairs2", x:83, y:25, w:12, h:12, label:"Лест.", type:"stairs", free:true },
+  ],
+};
+
+const roomColors = {
+  lecture: { free:"#6366F1", busy:"#E11D48", icon:"🏛️" },
+  practice: { free:"#0D9488", busy:"#D97706", icon:"✏️" },
+  lab: { free:"#7C3AED", busy:"#DC2626", icon:"💻" },
+  library: { free:"#0284C7", busy:"#DC2626", icon:"📚" },
+  admin: { free:"#059669", busy:"#DC2626", icon:"🏛️" },
+  seminar: { free:"#D97706", busy:"#DC2626", icon:"👥" },
+  wc: { free:"#94A3B8", busy:"#94A3B8", icon:"🚻" },
+  stairs: { free:"#CBD5E1", busy:"#CBD5E1", icon:"🪜" },
+  cafe: { free:"#F59E0B", busy:"#F59E0B", icon:"☕" },
+  medical: { free:"#EF4444", busy:"#EF4444", icon:"🏥" },
+};
+
+function MapScreen() {
+  const [floor, setFloor] = useState(1);
+  const [selected, setSelected] = useState(null);
+  const [search, setSearch] = useState("");
+  const [route, setRoute] = useState(null);
+  const rooms = floorRooms[floor] || [];
+  const allRooms = Object.values(floorRooms).flat();
+
+  const found = search ? allRooms.filter(r => r.label.toLowerCase().includes(search.toLowerCase())) : [];
+
+  return (
+    <div style={{ padding:"20px 16px" }}>
+      <SectionHeader title="Карта колледжа" subtitle="2D план здания" icon="🗺️" />
+      <div style={{ marginBottom:12 }}>
+        <SearchBar value={search} onChange={setSearch} placeholder="Найти кабинет..." />
+        {found.length > 0 && search && (
+          <div style={{ marginTop:6, background:T.white, border:`1px solid ${T.slate200}`, borderRadius:T.radius.md, overflow:"hidden" }}>
+            {found.map(r => (
+              <div key={r.id} onClick={() => { setFloor(Object.entries(floorRooms).find(([fl,rooms]) => rooms.find(rm=>rm.id===r.id))?.[0] || 1); setSelected(r); setSearch(""); setRoute(r); }} style={{ padding:"10px 14px", borderBottom:`1px solid ${T.slate100}`, cursor:"pointer", fontSize:13, display:"flex", alignItems:"center", gap:10 }}>
+                <span>{roomColors[r.type]?.icon}</span>
+                <span style={{ fontWeight:600 }}>{r.label}</span>
+                <span style={{ color:T.slate400, fontSize:11 }}>{r.type}</span>
+                <Badge color={r.free ? T.emerald : T.rose} small>{r.free ? "Своб." : "Занято"}</Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Floor selector */}
+      <div style={{ display:"flex", gap:8, marginBottom:14 }}>
+        {[1,2].map(f => <Pill key={f} active={floor===f} onClick={() => { setFloor(f); setSelected(null); }}>Этаж {f}</Pill>)}
+      </div>
+
+      {/* Legend */}
+      <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
+        {[["Свободно",T.emerald],["Занято",T.rose],["Сервисы",T.slate400]].map(([l,c]) => (
+          <div key={l} style={{ display:"flex", alignItems:"center", gap:5 }}>
+            <div style={{ width:10, height:10, borderRadius:2, background:c }} />
+            <span style={{ fontSize:10, color:T.slate500 }}>{l}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Floor plan SVG */}
+      <div style={{ background:T.slate50, border:`1px solid ${T.slate200}`, borderRadius:T.radius.lg, padding:10, marginBottom:14, overflow:"auto" }}>
+        <svg viewBox="0 0 100 85" style={{ width:"100%", maxHeight:300 }}>
+          {/* Corridors */}
+          <rect x={8} y={8} width={90} height={72} rx={2} fill="#E2E8F0" />
+          <rect x={10} y={30} width={86} height={4} fill="#CBD5E1" />
+          <rect x={10} y={58} width={86} height={4} fill="#CBD5E1" />
+          <rect x={48} y={8} width={4} height={69} fill="#CBD5E1" />
+
+          {rooms.map(r => {
+            const colors = roomColors[r.type] || { free:"#6366F1", busy:"#E11D48" };
+            const fill = r.free ? colors.free : colors.busy;
+            const isSelected = selected?.id === r.id;
+            const isRoute = route?.id === r.id;
+            return (
+              <g key={r.id} onClick={() => setSelected(selected?.id === r.id ? null : r)} style={{ cursor:"pointer" }}>
+                <rect x={r.x} y={r.y} width={r.w} height={r.h} rx={1.5}
+                  fill={fill} opacity={r.type==="wc"||r.type==="stairs" ? .4 : .85}
+                  stroke={isSelected || isRoute ? "#FFD700" : T.white} strokeWidth={isSelected||isRoute ? 1.5 : .5} />
+                <text x={r.x + r.w/2} y={r.y + r.h/2 + 1.5} textAnchor="middle" fontSize={r.type==="wc"||r.type==="stairs" ? 3 : 3.5} fill="white" fontWeight="700">{r.label}</text>
+              </g>
+            );
+          })}
+
+          {/* You are here marker */}
+          <circle cx={52} cy={32} r={2.5} fill="#FFD700" stroke="white" strokeWidth={.7} />
+          <text x={52} y={28} textAnchor="middle" fontSize={2.5} fill={T.slate700}>Вы</text>
+
+          {/* Route arrow if selected */}
+          {route && selected && route.id === selected.id && (
+            <line x1={52} y1={32} x2={selected.x + selected.w/2} y2={selected.y + selected.h/2} stroke="#FFD700" strokeWidth={1} strokeDasharray="2,1" />
+          )}
+        </svg>
+      </div>
+
+      {/* Selected room info */}
+      {selected && (
+        <Card style={{ padding:16 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <span style={{ fontSize:24 }}>{roomColors[selected.type]?.icon}</span>
+              <div>
+                <div style={{ fontSize:16, fontWeight:800, color:T.slate800 }}>{selected.label}</div>
+                <div style={{ fontSize:12, color:T.slate500 }}>{selected.type} · Этаж {floor}</div>
+              </div>
+            </div>
+            <Badge color={selected.free ? T.emerald : T.rose}>{selected.free ? "Свободно" : "Занято"}</Badge>
+          </div>
+          <div style={{ display:"flex", gap:8 }}>
+            <button onClick={() => setRoute(route?.id === selected.id ? null : selected)} style={{ flex:1, padding:"9px", background: route?.id === selected.id ? T.amberLight : T.indigoLight, color: route?.id === selected.id ? T.amber : T.indigo, border:"none", borderRadius:T.radius.sm, fontSize:12, fontWeight:700, cursor:"pointer" }}>
+              {route?.id === selected.id ? "❌ Убрать маршрут" : "🧭 Построить маршрут"}
+            </button>
+            {selected.free && !["wc","stairs","cafe","medical"].includes(selected.type) && (
+              <button style={{ flex:1, padding:"9px", background:T.indigo, color:T.white, border:"none", borderRadius:T.radius.sm, fontSize:12, fontWeight:700, cursor:"pointer" }}>📌 Забронировать</button>
+            )}
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// SCHEDULE PAGE (simple)
+// ═══════════════════════════════════════════════════
+function ScheduleScreen() {
+  const days = ["ПН","ВТ","СР","ЧТ","ПТ","СБ"];
+  const [day, setDay] = useState(1);
+  const scheduleData = {
+    0:[{t:"08:30",e:"09:50",s:"Математика",r:"301",type:"Лекция"},{t:"10:00",e:"11:20",s:"Программирование",r:"Лаб.2",type:"Практика"}],
+    1:[{t:"08:30",e:"09:50",s:"Информатика",r:"216",type:"Лекция"},{t:"09:55",e:"11:15",s:"Биология",r:"217",type:"Лекция"},{t:"11:30",e:"12:50",s:"Flutter",r:"Лаб.2",type:"Практика"}],
+    2:[{t:"09:00",e:"10:20",s:"Физика",r:"305",type:"Лекция"},{t:"10:30",e:"12:00",s:"Химия",r:"Лаб.1",type:"Лаборат."}],
+    3:[{t:"08:30",e:"09:50",s:"Математика",r:"301",type:"Практика"}],
+    4:[{t:"11:00",e:"13:00",s:"Программирование",r:"Лаб.2",type:"Проект"}],
+    5:[],
+  };
+  return (
+    <div style={{ padding:"20px 16px" }}>
+      <SectionHeader title="Расписание" subtitle="Апрель 2026" icon="📅" />
+      <div style={{ display:"flex", gap:8, marginBottom:18, overflowX:"auto" }}>
+        {days.map((d,i) => (
+          <div key={d} onClick={() => setDay(i)} style={{ minWidth:48, padding:"10px 6px", textAlign:"center", borderRadius:T.radius.md, background: day===i ? T.indigo : T.slate50, border:`1px solid ${day===i ? T.indigo : T.slate200}`, cursor:"pointer", flexShrink:0 }}>
+            <div style={{ fontSize:10, color: day===i ? "rgba(255,255,255,.75)" : T.slate400, fontWeight:700 }}>{d}</div>
+            <div style={{ fontSize:16, fontWeight:800, color: day===i ? T.white : T.slate800, marginTop:2 }}>{6+i}</div>
+            {(scheduleData[i]||[]).length > 0 && <div style={{ width:6, height:6, borderRadius:"50%", background: day===i ? "rgba(255,255,255,.6)" : T.indigo, margin:"4px auto 0" }} />}
+          </div>
+        ))}
+      </div>
+      {(scheduleData[day]||[]).length === 0 ? <EmptyState icon="🎉" text="Занятий нет — отдыхайте!" /> :
+        (scheduleData[day]||[]).map(c => (
+          <Card key={c.t} style={{ padding:"14px 16px", marginBottom:10, borderLeft:`3px solid ${T.indigo}` }}>
+            <div style={{ display:"flex", gap:12, alignItems:"center" }}>
+              <div style={{ minWidth:42, textAlign:"center" }}>
+                <div style={{ fontSize:13, fontWeight:800, color:T.indigo }}>{c.t}</div>
+                <div style={{ fontSize:10, color:T.slate400 }}>{c.e}</div>
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:T.slate800 }}>{c.s}</div>
+                <div style={{ fontSize:12, color:T.slate500 }}>Ауд. {c.r} · {c.type}</div>
+              </div>
+            </div>
+          </Card>
+        ))
+      }
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════
+// BOTTOM NAV
+// ═══════════════════════════════════════════════════
+const bottomNav = [
+  { id:"home", icon:"🏠", label:"Главная" },
+  { id:"profile", icon:"👤", label:"Профиль" },
+  { id:"library", icon:"📚", label:"Б-ка" },
+  { id:"rooms", icon:"🏫", label:"Кабинеты" },
+  { id:"more", icon:"⋯", label:"Ещё" },
+];
+
+const moreMenuItems = [
+  { id:"practice", icon:"🛠️", label:"Практика" },
+  { id:"support", icon:"💬", label:"Поддержка" },
+  { id:"materials", icon:"📖", label:"Материалы" },
+  { id:"map", icon:"🗺️", label:"Карта" },
+  { id:"schedule", icon:"📅", label:"Расписание" },
+];
+
+// ═══════════════════════════════════════════════════
+// ROOT APP
+// ═══════════════════════════════════════════════════
+export default function App() {
+  const [screen, setScreen] = useState("home");
+  const [showMore, setShowMore] = useState(false);
+  const contentRef = useRef(null);
+
+  const navigate = (id) => { setScreen(id); setShowMore(false); if(contentRef.current) contentRef.current.scrollTop = 0; };
+
+  const renderScreen = () => {
+    switch(screen) {
+      case "home":      return <HomeScreen onNavigate={navigate} />;
+      case "profile":   return <ProfileScreen />;
+      case "library":   return <LibraryScreen />;
+      case "rooms":     return <RoomsScreen />;
+      case "practice":  return <PracticeScreen />;
+      case "support":   return <SupportScreen />;
+      case "materials": return <MaterialsScreen />;
+      case "map":       return <MapScreen />;
+      case "schedule":  return <ScheduleScreen />;
+      default:          return <HomeScreen onNavigate={navigate} />;
     }
-    _AppStateScope.of(context).login(name);
-  }
+  };
 
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.only(
-            left: 24, right: 24, top: 24,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: 48),
-              const FlutterLogo(size: 96),
-              const SizedBox(height: 24),
-              Text(
-                loc.welcomeTitle,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(loc.welcomeSubtitle, textAlign: TextAlign.center),
-              const SizedBox(height: 28),
-              TextField(
-                controller: _controller,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _tryLogin(),
-                decoration: InputDecoration(
-                  labelText: loc.nameLabel,
-                  border: const OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: _tryLogin,
-                child: Text(loc.loginButton),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                loc.testDataHint,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.grey),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                loc.demoNote,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.grey),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+  const activeBottomId = ["home","profile","library","rooms"].includes(screen) ? screen : "more";
 
-// ─────────────────────────────────────────────────────────────────
-// ГЛАВНЫЙ ЭКРАН
-// ─────────────────────────────────────────────────────────────────
-class MainScreen extends StatefulWidget {
-  final String userName;
-  const MainScreen({super.key, required this.userName});
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"100vh", maxWidth:420, margin:"0 auto", background:T.slate50, fontFamily:"'Segoe UI',system-ui,sans-serif", position:"relative", overflow:"hidden" }}>
+      <style>{`
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width:3px; height:3px; }
+        ::-webkit-scrollbar-thumb { background:#CBD5E1; borderRadius:4px; }
+        button { font-family: inherit; }
+        input, textarea { font-family: inherit; }
+      `}</style>
 
-  @override
-  State<MainScreen> createState() => _MainScreenState();
-}
+      {/* Header */}
+      <div style={{ padding:"12px 16px 10px", background:T.white, borderBottom:`1px solid ${T.slate100}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, zIndex:10 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <div style={{ width:28, height:28, borderRadius:T.radius.sm, background:`linear-gradient(135deg,${T.indigo},${T.violet})`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14 }}>🎓</div>
+          <div>
+            <span style={{ fontSize:14, fontWeight:800, color:T.slate800, letterSpacing:"-.3px" }}>CollegeDu</span>
+            <span style={{ fontSize:10, color:T.slate400, marginLeft:6 }}>ИС-25-3</span>
+          </div>
+        </div>
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          <div style={{ position:"relative" }}>
+            <span style={{ fontSize:20, cursor:"pointer" }}>🔔</span>
+            <div style={{ position:"absolute", top:-2, right:-2, width:8, height:8, borderRadius:"50%", background:T.rose, border:`1.5px solid ${T.white}` }} />
+          </div>
+          <div style={{ width:30, height:30, borderRadius:"50%", background:`linear-gradient(135deg,${T.indigo},${T.violet})`, display:"flex", alignItems:"center", justifyContent:"center", color:T.white, fontSize:13, fontWeight:800, cursor:"pointer" }} onClick={() => navigate("profile")}>И</div>
+        </div>
+      </div>
 
-class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0;
+      {/* Content */}
+      <div ref={contentRef} style={{ flex:1, overflowY:"auto", overflowX:"hidden" }}>
+        {renderScreen()}
+      </div>
 
-  void _onTabTapped(int index) => setState(() => _selectedIndex = index);
+      {/* More menu overlay */}
+      {showMore && (
+        <div style={{ position:"absolute", bottom:70, left:0, right:0, background:T.white, borderTop:`1px solid ${T.slate200}`, padding:"16px", zIndex:20, boxShadow:"0 -8px 32px rgba(0,0,0,.12)" }}>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8 }}>
+            {moreMenuItems.map(m => (
+              <div key={m.id} onClick={() => navigate(m.id)} style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:5, padding:"12px 4px", borderRadius:T.radius.md, background:T.slate50, cursor:"pointer", border:`1px solid ${screen===m.id ? T.indigo : "transparent"}` }}>
+                <span style={{ fontSize:22 }}>{m.icon}</span>
+                <span style={{ fontSize:9, fontWeight:700, color:T.slate600, textAlign:"center" }}>{m.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {showMore && <div onClick={() => setShowMore(false)} style={{ position:"absolute", inset:0, zIndex:15 }} />}
 
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    final pages = [
-      HomePage(userName: widget.userName),
-      const MenuPage(),
-      const JournalPage(),
-      const CoursesPage(),
-      ProfilePage(userName: widget.userName),
-    ];
-
-    return Scaffold(
-      body: IndexedStack(index: _selectedIndex, children: pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: _onTabTapped,
-        destinations: [
-          NavigationDestination(icon: const Icon(Icons.home_outlined), selectedIcon: const Icon(Icons.home), label: loc.homeTab),
-          NavigationDestination(icon: const Icon(Icons.restaurant_menu_outlined), selectedIcon: const Icon(Icons.restaurant_menu), label: loc.menuPageTitle),
-          NavigationDestination(icon: const Icon(Icons.menu_book_outlined), selectedIcon: const Icon(Icons.menu_book), label: loc.journalTitle),
-          NavigationDestination(icon: const Icon(Icons.school_outlined), selectedIcon: const Icon(Icons.school), label: loc.coursesTitle),
-          NavigationDestination(icon: const Icon(Icons.person_outline), selectedIcon: const Icon(Icons.person), label: loc.profileTitle),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const AIAssistantPage()),
-        ),
-        tooltip: loc.aiAssistantTitle,
-        child: const Icon(Icons.smart_toy),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// ГЛАВНАЯ СТРАНИЦА
-// ─────────────────────────────────────────────────────────────────
-class HomePage extends StatelessWidget {
-  final String userName;
-  const HomePage({super.key, required this.userName});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // Приветствие
-          Row(
-            children: [
-              CircleAvatar(radius: 28, child: Text(userName.isNotEmpty ? userName[0] : 'U')),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  loc.greet(userName),
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.notifications_outlined),
-                onPressed: () {},
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-
-          // Следующая пара (виджет-анонс)
-          const _NextClassCard(),
-          const SizedBox(height: 18),
-
-          // Курсы
-          Text(loc.myCourses, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 140,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: AppData.courses.length,
-              itemBuilder: (_, i) {
-                final c = AppData.courses[i];
-                return Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: _CourseCard(course: c),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 18),
-
-          // Чат куратора
-          Text(loc.groupChatTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          _AnnouncementsPreview(announcements: AppData.announcements),
-          const SizedBox(height: 18),
-
-          // События
-          Text(loc.upcomingEvents, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          SizedBox(
-            height: 120,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: AppData.events.length,
-              itemBuilder: (_, i) => Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: _EventCard(event: AppData.events[i]),
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-
-          // Новости
-          Text(loc.newsTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 8),
-          const _NewsTile(title: 'Открытие новой лаборатории', subtitle: 'Вслед за обновлением кампуса...'),
-          const _NewsTile(title: 'Расписание экзаменов', subtitle: 'Посмотреть на странице Расписание.'),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MenuPage())),
-            icon: const Icon(Icons.restaurant),
-            label: Text(loc.viewMenuButton),
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-}
-
-/// Карточка "следующая пара" — добавлена новая функция
-class _NextClassCard extends StatelessWidget {
-  const _NextClassCard();
-
-  @override
-  Widget build(BuildContext context) {
-    // Берём ближайший день с парами (вторник в нашем mock)
-    final classes = AppData.scheduleByDay[1] ?? [];
-    if (classes.isEmpty) return const SizedBox.shrink();
-    final next = classes.first;
-    return Card(
-      color: Theme.of(context).colorScheme.primaryContainer,
-      child: ListTile(
-        leading: Icon(Icons.access_time, color: Theme.of(context).colorScheme.primary),
-        title: Text(next.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text('${next.time}  ·  ауд. ${next.room}  ·  ${next.teacher}'),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SchedulePage())),
-      ),
-    );
-  }
-}
-
-class _CourseCard extends StatelessWidget {
-  final Course course;
-  const _CourseCard({required this.course});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => CourseDetailPage(course: course))),
-      child: SizedBox(
-        width: 220,
-        child: Card(
-          elevation: 3,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(course.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 6),
-                Text(course.teacher, style: TextStyle(color: Colors.grey[700])),
-                const SizedBox(height: 8),
-                Expanded(child: Text(course.description, maxLines: 3, overflow: TextOverflow.ellipsis)),
-                Align(alignment: Alignment.bottomRight, child: Icon(Icons.arrow_forward, color: Theme.of(context).colorScheme.primary)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AnnouncementsPreview extends StatelessWidget {
-  final List<Announcement> announcements;
-  const _AnnouncementsPreview({required this.announcements});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(loc.onlyCurator, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            ...announcements.map((a) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${a.author} • ${a.time}', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                  Text(a.message),
-                ],
-              ),
-            )),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => GroupChatPage(announcements: announcements))),
-                child: Text(loc.openAnnouncements),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EventCard extends StatelessWidget {
-  final Event event;
-  const _EventCard({required this.event});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return GestureDetector(
-      onTap: () => showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(event.title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(event.description),
-              const SizedBox(height: 8),
-              Text('${loc.eventDate}: ${event.date}'),
-              Text('${loc.eventLocation}: ${event.location}'),
-            ],
-          ),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(loc.close))],
-        ),
-      ),
-      child: SizedBox(
-        width: 200,
-        child: Card(
-          elevation: 3,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(event.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold), maxLines: 2, overflow: TextOverflow.ellipsis),
-                const Spacer(),
-                Text(event.date, style: const TextStyle(color: Colors.grey)),
-                Text(event.location, style: const TextStyle(color: Colors.grey)),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _NewsTile extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  const _NewsTile({required this.title, required this.subtitle});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return Card(
-      child: ListTile(
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: () => showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text(title),
-            content: Text(subtitle),
-            actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(loc.close))],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// СТРАНИЦА КУРСОВ
-// ─────────────────────────────────────────────────────────────────
-class CoursesPage extends StatelessWidget {
-  const CoursesPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(loc.coursesTitle)),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: AppData.courses.length,
-        itemBuilder: (_, i) {
-          final c = AppData.courses[i];
-          return Card(
-            child: ListTile(
-              title: Text(c.title),
-              subtitle: Text(c.teacher),
-              trailing: const Icon(Icons.arrow_forward),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => CourseDetailPage(course: c))),
-            ),
+      {/* Bottom Navigation */}
+      <div style={{ height:68, background:T.white, borderTop:`1px solid ${T.slate200}`, display:"flex", alignItems:"stretch", flexShrink:0, zIndex:10 }}>
+        {bottomNav.map(n => {
+          const isActive = activeBottomId === n.id && !(n.id === "more" && !showMore && activeBottomId === "more");
+          const isMoreActive = n.id === "more" && showMore;
+          return (
+            <button key={n.id} onClick={() => n.id === "more" ? setShowMore(s => !s) : navigate(n.id)} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:3, border:"none", background:"transparent", cursor:"pointer", position:"relative", transition:"all .15s" }}>
+              {(isActive || isMoreActive) && <div style={{ position:"absolute", top:0, left:"50%", transform:"translateX(-50%)", width:28, height:3, borderRadius:"0 0 3px 3px", background:T.indigo }} />}
+              <span style={{ fontSize:22, lineHeight:1 }}>{n.icon}</span>
+              <span style={{ fontSize:9, fontWeight:700, color: isActive || isMoreActive ? T.indigo : T.slate400 }}>{n.label}</span>
+            </button>
           );
-        },
-      ),
-    );
-  }
-}
-
-class CourseDetailPage extends StatelessWidget {
-  final Course course;
-  const CourseDetailPage({super.key, required this.course});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(course.title)),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(course.teacher, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Text(course.description),
-            const SizedBox(height: 16),
-            Text(loc.materialsTitle, style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView(
-                children: [
-                  ListTile(leading: const Icon(Icons.picture_as_pdf), title: Text(loc.lecture1), trailing: const Icon(Icons.download)),
-                  ListTile(leading: const Icon(Icons.picture_as_pdf), title: Text(loc.practice1), trailing: const Icon(Icons.download)),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// СТРАНИЦА МЕНЮ
-// ─────────────────────────────────────────────────────────────────
-class MenuPage extends StatefulWidget {
-  const MenuPage({super.key});
-
-  @override
-  State<MenuPage> createState() => _MenuPageState();
-}
-
-class _MenuPageState extends State<MenuPage> {
-  String _filter = 'Все';
-  final List<MenuItem> _cart = [];
-
-  void _addToCart(MenuItem item) {
-    setState(() => _cart.add(item));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(AppL10n.of(context).itemAdded(item.name))),
-    );
-  }
-
-  int get _cartTotal => _cart.fold(0, (sum, item) => sum + item.price);
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    final types = <String>{'Все', ...AppData.menuItems.map((e) => e.type)};
-    final shown = _filter == 'Все'
-        ? AppData.menuItems
-        : AppData.menuItems.where((m) => m.type == _filter).toList();
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(loc.menuPageTitle),
-        actions: [
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.shopping_cart),
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => PreOrderPage(cart: List.unmodifiable(_cart), total: _cartTotal, onClear: () => setState(() => _cart.clear()))),
-                ),
-              ),
-              if (_cart.isNotEmpty)
-                Positioned(
-                  right: 6, top: 6,
-                  child: CircleAvatar(
-                    radius: 8,
-                    backgroundColor: Colors.red,
-                    child: Text('${_cart.length}', style: const TextStyle(fontSize: 10, color: Colors.white)),
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            SizedBox(
-              height: 40,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: types.map((t) => Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: Text(t == 'Все' ? loc.allFilter : t),
-                    selected: _filter == t,
-                    onSelected: (_) => setState(() => _filter = t),
-                  ),
-                )).toList(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView.builder(
-                itemCount: shown.length,
-                itemBuilder: (_, i) {
-                  final m = shown[i];
-                  return Card(
-                    child: ListTile(
-                      title: Text(m.name),
-                      subtitle: Text('${m.type} • ${m.price}₸'),
-                      trailing: FilledButton.tonal(
-                        onPressed: () => _addToCart(m),
-                        child: Text(loc.preorderButton),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class PreOrderPage extends StatelessWidget {
-  final List<MenuItem> cart;
-  final int total;
-  final VoidCallback onClear;
-
-  const PreOrderPage({super.key, required this.cart, required this.total, required this.onClear});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(loc.cartTitle)),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: cart.isEmpty
-            ? Center(child: Text(loc.cartEmpty))
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: cart.length,
-                      separatorBuilder: (_, __) => const Divider(),
-                      itemBuilder: (_, i) => ListTile(
-                        title: Text(cart[i].name),
-                        subtitle: Text('${cart[i].type} • ${cart[i].price}₸'),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text('${loc.total} $total₸', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // Очищаем ПОСЛЕ подтверждения, а не до
-                        showDialog(
-                          context: context,
-                          builder: (_) => AlertDialog(
-                            title: Text(loc.orderConfirmed),
-                            content: Text(loc.pickupReady),
-                            actions: [
-                              TextButton(
-                                onPressed: () {
-                                  onClear();
-                                  Navigator.pop(context);
-                                  Navigator.pop(context);
-                                },
-                                child: Text(loc.close),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      child: Text(loc.payNow),
-                    ),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// ЖУРНАЛ УСПЕВАЕМОСТИ
-// ─────────────────────────────────────────────────────────────────
-class JournalPage extends StatelessWidget {
-  const JournalPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(loc.journalTitle),
-          actions: [
-            TextButton.icon(
-              onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SchedulePage())),
-              icon: const Icon(Icons.calendar_today, size: 18),
-              label: Text(loc.showScheduleButton),
-            ),
-          ],
-          bottom: TabBar(
-            tabs: [
-              Tab(text: '${loc.semesterLabel} 1'),
-              Tab(text: '${loc.semesterLabel} 2'),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _SemesterList(grades: AppData.grades, semester: 1),
-            _SemesterList(grades: AppData.grades, semester: 2),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SemesterList extends StatelessWidget {
-  final List<Grade> grades;
-  final int semester;
-  const _SemesterList({required this.grades, required this.semester});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: grades.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
-      itemBuilder: (_, i) {
-        final g = grades[i];
-        final value = semester == 1 ? g.semester1 : g.semester2;
-        final color = value >= 4 ? Colors.green : (value == 3 ? Colors.orange : Colors.red);
-        return ListTile(
-          title: Text(g.subject, style: const TextStyle(fontWeight: FontWeight.bold)),
-          subtitle: Text('${loc.averageLabel}: ${g.average.toStringAsFixed(1)}'),
-          trailing: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text('$value', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-          ),
-        );
-      },
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// РАСПИСАНИЕ (дни → разные пары)
-// ─────────────────────────────────────────────────────────────────
-class SchedulePage extends StatefulWidget {
-  const SchedulePage({super.key});
-
-  @override
-  State<SchedulePage> createState() => _SchedulePageState();
-}
-
-class _SchedulePageState extends State<SchedulePage> {
-  int _selectedDayIndex = 1;
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    final classes = AppData.scheduleByDay[_selectedDayIndex] ?? [];
-
-    return Scaffold(
-      appBar: AppBar(title: Text(loc.scheduleTitle)),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text('апрель 2026 г.', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange[100],
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(loc.weekInfo, style: TextStyle(color: Colors.orange[900], fontWeight: FontWeight.w600)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: AppData.calendarDays.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final day = entry.value;
-                  final selected = index == _selectedDayIndex;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedDayIndex = index),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      width: 64,
-                      margin: const EdgeInsets.only(right: 12),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      decoration: BoxDecoration(
-                        color: selected ? Theme.of(context).colorScheme.primary : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: selected ? Theme.of(context).colorScheme.primary : Colors.grey[300]!),
-                      ),
-                      child: Column(
-                        children: [
-                          Text(day.weekday, style: TextStyle(color: selected ? Colors.white : Colors.black54, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          Text('${day.date}', style: TextStyle(color: selected ? Colors.white : Colors.black, fontSize: 18, fontWeight: FontWeight.bold)),
-                          if (day.hasClass)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Icon(Icons.circle, size: 8, color: selected ? Colors.white : Theme.of(context).colorScheme.primary),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (classes.isEmpty)
-              const Expanded(child: Center(child: Text('Пар нет 🎉', style: TextStyle(fontSize: 18))))
-            else
-              Expanded(
-                child: ListView.separated(
-                  itemCount: classes.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (_, i) => _ScheduleCard(scheduleClass: classes[i]),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ScheduleCard extends StatelessWidget {
-  final ScheduleClass scheduleClass;
-  const _ScheduleCard({required this.scheduleClass});
-
-  @override
-  Widget build(BuildContext context) {
-    final c = scheduleClass;
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(c.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            _IconRow(icon: Icons.description, text: c.subtitle),
-            const SizedBox(height: 8),
-            _IconRow(icon: Icons.access_time, text: c.time),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.person, size: 18, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                Expanded(child: Text(c.teacher)),
-                Icon(Icons.location_on, size: 18, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 4),
-                Text(c.room),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _IconRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _IconRow({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text)),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// ЧАТ ГРУППЫ
-// ─────────────────────────────────────────────────────────────────
-class GroupChatPage extends StatelessWidget {
-  final List<Announcement> announcements;
-  const GroupChatPage({super.key, required this.announcements});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(loc.groupChatTitle)),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: announcements.length,
-              itemBuilder: (_, i) {
-                final a = announcements[i];
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('${a.author} • ${a.time}', style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-                        const SizedBox(height: 8),
-                        Text(a.message),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Text(loc.curatorOnlyNote, style: TextStyle(color: Colors.grey[600])),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// AI-АССИСТЕНТ (стриминг-индикатор, настраиваемый URL)
-// ─────────────────────────────────────────────────────────────────
-class AIAssistantPage extends StatefulWidget {
-  const AIAssistantPage({super.key});
-
-  @override
-  State<AIAssistantPage> createState() => _AIAssistantPageState();
-}
-
-class _AIAssistantPageState extends State<AIAssistantPage> {
-  final List<ChatMessage> _messages = [];
-  final TextEditingController _controller = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-  bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _sendMessage(String text) async {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) return;
-
-    setState(() {
-      _messages.add(ChatMessage(text: trimmed, isUser: true));
-      _isLoading = true;
-    });
-    _controller.clear();
-    _scrollToBottom();
-
-    final loc = AppL10n.of(context);
-    final ollamaUrl = _AppStateScope.of(context).ollamaUrl;
-
-    // Проверяем быстрые ответы
-    String reply = '';
-    for (final qa in loc.quickQA) {
-      if (trimmed == qa.question) {
-        reply = qa.answer;
-        break;
-      }
-    }
-
-    // Если не нашли — идём в Ollama
-    if (reply.isEmpty) {
-      reply = await AIAssistantService(trimmed, ollamaUrl: ollamaUrl).getResponse();
-    }
-
-    if (!mounted) return; // проверка после await
-    setState(() {
-      _messages.add(ChatMessage(text: reply, isUser: false));
-      _isLoading = false;
-    });
-    _scrollToBottom();
-  }
-
-  void _scrollToBottom() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    return Scaffold(
-      appBar: AppBar(title: Text(loc.aiAssistantTitle)),
-      body: Column(
-        children: [
-          Expanded(
-            child: _messages.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.smart_toy_outlined, size: 72, color: Theme.of(context).colorScheme.primary),
-                        const SizedBox(height: 16),
-                        Text(loc.aiAssistantTitle, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        Text(loc.quickQuestions, style: const TextStyle(color: Colors.grey)),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _messages.length,
-                    itemBuilder: (_, i) => _ChatBubble(message: _messages[i]),
-                  ),
-          ),
-          // Быстрые вопросы
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: loc.quickQA.map((qa) => ActionChip(
-                label: Text(qa.question, overflow: TextOverflow.ellipsis),
-                onPressed: () => _sendMessage(qa.question),
-              )).toList(),
-            ),
-          ),
-          if (_isLoading)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-                  const SizedBox(width: 12),
-                  Text(loc.aiThinking),
-                ],
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: _sendMessage,
-                    decoration: InputDecoration(
-                      hintText: loc.aiPlaceholder,
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  onPressed: _isLoading ? null : () => _sendMessage(_controller.text),
-                  icon: const Icon(Icons.send),
-                  tooltip: loc.send,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ChatBubble extends StatelessWidget {
-  final ChatMessage message;
-  const _ChatBubble({required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    final isUser = message.isUser;
-    return Align(
-      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.all(12),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        decoration: BoxDecoration(
-          color: isUser ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isUser ? 16 : 0),
-            bottomRight: Radius.circular(isUser ? 0 : 16),
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            if (!isUser) ...[
-              CircleAvatar(radius: 14, backgroundColor: Theme.of(context).colorScheme.primary, child: const Icon(Icons.smart_toy, size: 14, color: Colors.white)),
-              const SizedBox(width: 8),
-            ],
-            Flexible(
-              child: Text(message.text, style: TextStyle(color: isUser ? Colors.white : Theme.of(context).colorScheme.onSurface)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// ПРОФИЛЬ
-// ─────────────────────────────────────────────────────────────────
-class ProfilePage extends StatelessWidget {
-  final String userName;
-  const ProfilePage({super.key, required this.userName});
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    final state = _AppStateScope.of(context);
-
-    return Scaffold(
-      appBar: AppBar(title: Text(loc.profileTitle)),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Center(
-            child: Column(
-              children: [
-                CircleAvatar(radius: 42, child: Text(userName.isNotEmpty ? userName[0] : 'U', style: const TextStyle(fontSize: 32))),
-                const SizedBox(height: 12),
-                Text(userName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text(loc.studentGroup, style: const TextStyle(color: Colors.grey)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(loc.specialty),
-          Text(loc.studentGpa),
-          Text(loc.studentCredits),
-          const SizedBox(height: 12),
-          ListTile(leading: const Icon(Icons.email), title: Text(loc.emailLabel)),
-          ListTile(leading: const Icon(Icons.phone), title: Text(loc.phoneLabel)),
-          const Divider(),
-
-          // Тема
-          SwitchListTile(
-            secondary: const Icon(Icons.brightness_6),
-            title: Text(loc.darkMode),
-            subtitle: Text(state.themeMode == ThemeMode.dark ? loc.darkThemeLabel : loc.lightThemeLabel),
-            value: state.themeMode == ThemeMode.dark,
-            onChanged: state.setTheme,
-          ),
-
-          // Язык
-          ListTile(
-            leading: const Icon(Icons.language),
-            title: Text(loc.changeLanguage),
-            trailing: DropdownButton<Locale>(
-              value: state.locale,
-              underline: const SizedBox(),
-              items: [
-                DropdownMenuItem(value: const Locale('ru'), child: Text(loc.languageRussian)),
-                DropdownMenuItem(value: const Locale('kk'), child: Text(loc.languageKazakh)),
-              ],
-              onChanged: (v) { if (v != null) state.setLocale(v); },
-            ),
-          ),
-
-          const Divider(),
-
-          // Уведомления
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(loc.notificationsTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.access_time),
-            title: Text(loc.notifyClasses),
-            value: state.notifyClasses,
-            onChanged: state.setNotifyClasses,
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.announcement),
-            title: Text(loc.notifyAnnouncements),
-            value: state.notifyAnnouncements,
-            onChanged: state.setNotifyAnnouncements,
-          ),
-          SwitchListTile(
-            secondary: const Icon(Icons.event),
-            title: Text(loc.notifyEvents),
-            value: state.notifyEvents,
-            onChanged: state.setNotifyEvents,
-          ),
-
-          const Divider(),
-
-          // Настройка URL Ollama
-          _OllamaUrlTile(currentUrl: state.ollamaUrl, onSave: state.setOllamaUrl),
-
-          const Divider(),
-
-          ListTile(
-            leading: const Icon(Icons.forum),
-            title: Text(loc.announcementsTitle),
-            subtitle: Text(loc.onlyCurator),
-            trailing: const Icon(Icons.arrow_forward),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const GroupChatPage(announcements: AppData.announcements))),
-          ),
-
-          const SizedBox(height: 8),
-          ElevatedButton.icon(
-            onPressed: () => showDialog(
-              context: context,
-              builder: (_) => AlertDialog(
-                title: Text(loc.logoutTitle),
-                content: Text(loc.logoutConfirm),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: Text(loc.cancel)),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      state.logout();
-                    },
-                    child: Text(loc.logoutButton, style: const TextStyle(color: Colors.red)),
-                  ),
-                ],
-              ),
-            ),
-            icon: const Icon(Icons.exit_to_app),
-            label: Text(loc.logoutButton),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-          ),
-          const SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-}
-
-/// Виджет настройки URL для Ollama — новая функция
-class _OllamaUrlTile extends StatefulWidget {
-  final String currentUrl;
-  final ValueChanged<String> onSave;
-  const _OllamaUrlTile({required this.currentUrl, required this.onSave});
-
-  @override
-  State<_OllamaUrlTile> createState() => _OllamaUrlTileState();
-}
-
-class _OllamaUrlTileState extends State<_OllamaUrlTile> {
-  bool _editing = false;
-  late TextEditingController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = TextEditingController(text: widget.currentUrl);
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final loc = AppL10n.of(context);
-    if (!_editing) {
-      return ListTile(
-        leading: const Icon(Icons.computer),
-        title: Text(loc.ollamaUrlLabel),
-        subtitle: Text(widget.currentUrl),
-        trailing: IconButton(icon: const Icon(Icons.edit), onPressed: () => setState(() => _editing = true)),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _ctrl,
-              decoration: InputDecoration(
-                labelText: loc.ollamaUrlLabel,
-                hintText: loc.ollamaUrlHint,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          FilledButton(
-            onPressed: () {
-              widget.onSave(_ctrl.text);
-              setState(() => _editing = false);
-            },
-            child: Text(loc.saveButton),
-          ),
-        ],
-      ),
-    );
-  }
+        })}
+      </div>
+    </div>
+  );
 }
